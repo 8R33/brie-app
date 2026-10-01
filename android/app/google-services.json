@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "879333288681",
+    "project_id": "brie-app-462f5",
+    "storage_bucket": "brie-app-462f5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:879333288681:android:5259fe5e72b2d74ec4de78",
+        "android_client_info": {
+          "package_name": "com.example.brie"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyByJjOZl8XCUMe9dzt2fHrJvd_aurd6bPw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
