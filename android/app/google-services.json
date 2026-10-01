@@ -12,7 +12,20 @@
           "package_name": "com.example.brie"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "879333288681-es129mr9l09b68umircrjrr822q4i0o8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.brie",
+            "certificate_hash": "215ab933106e314feed33c116fe20c5800f4cb6c"
+          }
+        },
+        {
+          "client_id": "879333288681-jk6u27505urpaf66eod9ucrc72jvsp1g.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyByJjOZl8XCUMe9dzt2fHrJvd_aurd6bPw"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "879333288681-jk6u27505urpaf66eod9ucrc72jvsp1g.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "879333288681-v8hocf2erq479c54m7kr36j489ubqbc0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.brie"
+              }
+            }
+          ]
         }
       }
     }

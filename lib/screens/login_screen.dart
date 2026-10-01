@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import 'home_screen.dart';
 import 'create_account_screen.dart';
@@ -18,6 +19,17 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isLoggingIn = false;
   bool _isSendingResetEmail = false;
+  bool _isGoogleSigningIn = false;
+
+  // Google Sign-In is initialized once when the screen starts.
+  late final Future<void> _googleSignInInitialization;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _googleSignInInitialization = GoogleSignIn.instance.initialize();
+  }
 
   @override
   void dispose() {
@@ -115,6 +127,90 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ------------------------------------------------------------
+  // GOOGLE SIGN-IN
+  // ------------------------------------------------------------
+
+  Future<void> _signInWithGoogle() async {
+    if (_isLoggingIn || _isGoogleSigningIn) return;
+
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _isGoogleSigningIn = true;
+    });
+
+    try {
+      // Wait for the one-time initialization.
+      await _googleSignInInitialization;
+
+      final googleSignIn = GoogleSignIn.instance;
+
+      // Show Google's account chooser.
+      final GoogleSignInAccount googleUser = await googleSignIn.authenticate();
+
+      // Get the Google authentication information.
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      // Create a Firebase credential using Google's ID token.
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      // Sign in to Firebase with the Google credential.
+      await FirebaseAuth.instance.signInWithCredential(credential);
+
+      if (!mounted) return;
+
+      // Go to Home after successful sign-in.
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+    } on GoogleSignInException catch (e) {
+      if (!mounted) return;
+
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        _showMessage('Google sign-in was cancelled.');
+      } else {
+        _showMessage('Unable to sign in with Google. Please try again.');
+      }
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      String message;
+
+      switch (e.code) {
+        case 'account-exists-with-different-credential':
+          message = 'An account already exists with this email. Please use your email and password.';
+          break;
+
+        case 'network-request-failed':
+          message = 'Please check your internet connection and try again.';
+          break;
+
+        case 'user-disabled':
+          message = 'This account has been disabled.';
+          break;
+
+        default:
+          message = 'Unable to sign in with Google. Please try again.';
+      }
+
+      _showMessage(message);
+    } catch (_) {
+      if (!mounted) return;
+
+      _showMessage('Unable to sign in with Google. Please try again.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGoogleSigningIn = false;
+        });
+      }
+    }
+  }
+
+  // ------------------------------------------------------------
   // FORGOT PASSWORD
   // ------------------------------------------------------------
 
@@ -203,6 +299,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isBusy =
+        _isLoggingIn || _isGoogleSigningIn || _isSendingResetEmail;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFFF4F7),
       body: SafeArea(
@@ -211,9 +310,12 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Back button
+              // --------------------------------------------------
+              // BACK BUTTON
+              // --------------------------------------------------
+
               IconButton(
-                onPressed: _isLoggingIn
+                onPressed: isBusy
                     ? null
                     : () {
                         Navigator.pop(context);
@@ -226,7 +328,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 15),
 
-              // Butterfly
+              // --------------------------------------------------
+              // BUTTERFLY
+              // --------------------------------------------------
               Center(
                 child: Image.asset(
                   'assets/images/butterfly.png',
@@ -238,7 +342,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 20),
 
-              // Title
+              // --------------------------------------------------
+              // TITLE
+              // --------------------------------------------------
               const Center(
                 child: Text(
                   'Welcome back',
@@ -253,7 +359,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 10),
 
-              // Subtitle
+              // --------------------------------------------------
+              // SUBTITLE
+              // --------------------------------------------------
               const Center(
                 child: Text(
                   'Your little space is waiting for you.',
@@ -264,7 +372,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 40),
 
-              // Email
+              // --------------------------------------------------
+              // EMAIL
+              // --------------------------------------------------
               const Text(
                 'Email',
                 style: TextStyle(
@@ -280,7 +390,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
-                enabled: !_isLoggingIn,
+                enabled: !_isLoggingIn && !_isGoogleSigningIn,
                 decoration: _inputDecoration(
                   hintText: 'you@example.com',
                   icon: Icons.email_outlined,
@@ -289,7 +399,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 20),
 
-              // Password
+              // --------------------------------------------------
+              // PASSWORD
+              // --------------------------------------------------
               const Text(
                 'Password',
                 style: TextStyle(
@@ -305,13 +417,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _passwordController,
                 obscureText: _obscurePassword,
                 textInputAction: TextInputAction.done,
-                enabled: !_isLoggingIn,
+                enabled: !_isLoggingIn && !_isGoogleSigningIn,
                 onSubmitted: (_) => _login(),
                 decoration: _inputDecoration(
                   hintText: 'Enter your password',
                   icon: Icons.lock_outline,
                   suffixIcon: IconButton(
-                    onPressed: _isLoggingIn
+                    onPressed: isBusy
                         ? null
                         : () {
                             setState(() {
@@ -330,11 +442,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 10),
 
-              // Forgot password
+              // --------------------------------------------------
+              // FORGOT PASSWORD
+              // --------------------------------------------------
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: _isLoggingIn || _isSendingResetEmail
+                  onPressed:
+                      _isLoggingIn || _isGoogleSigningIn || _isSendingResetEmail
                       ? null
                       : _forgotPassword,
                   child: _isSendingResetEmail
@@ -358,12 +473,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 15),
 
-              // Login button
+              // --------------------------------------------------
+              // LOGIN BUTTON
+              // --------------------------------------------------
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _isLoggingIn ? null : _login,
+                  onPressed: _isLoggingIn || _isGoogleSigningIn ? null : _login,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFE58BA7),
                     disabledBackgroundColor: const Color(0xFFE5B5C4),
@@ -394,7 +511,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 25),
 
-              // Divider
+              // --------------------------------------------------
+              // DIVIDER
+              // --------------------------------------------------
               Row(
                 children: [
                   Expanded(child: Divider(color: Colors.grey.shade300)),
@@ -411,14 +530,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 20),
 
-              // Google button
+              // --------------------------------------------------
+              // GOOGLE BUTTON
+              // --------------------------------------------------
               SizedBox(
                 width: double.infinity,
                 height: 54,
                 child: OutlinedButton(
-                  onPressed: () {
-                    _showMessage('Google sign-in will be connected later.');
-                  },
+                  onPressed: _isLoggingIn || _isGoogleSigningIn
+                      ? null
+                      : _signInWithGoogle,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF6D4A5B),
                     side: BorderSide(color: Colors.grey.shade300),
@@ -426,33 +547,44 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.g_mobiledata,
-                        size: 30,
-                        color: Color(0xFF6D4A5B),
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Continue with Google',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
+                  child: _isGoogleSigningIn
+                      ? const SizedBox(
+                          width: 23,
+                          height: 23,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Color(0xFFE58BA7),
+                          ),
+                        )
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.g_mobiledata,
+                              size: 30,
+                              color: Color(0xFF6D4A5B),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Continue with Google',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
 
               const SizedBox(height: 25),
 
-              // Create account link
+              // --------------------------------------------------
+              // CREATE ACCOUNT
+              // --------------------------------------------------
               Center(
                 child: TextButton(
-                  onPressed: _isLoggingIn
+                  onPressed: isBusy
                       ? null
                       : () {
                           Navigator.pushReplacement(

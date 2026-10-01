@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import 'home_screen.dart';
 import 'login_screen.dart';
@@ -21,6 +22,17 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isCreatingAccount = false;
+  bool _isGoogleSigningIn = false;
+
+  // Google Sign-In is initialized once when this screen opens.
+  late final Future<void> _googleSignInInitialization;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _googleSignInInitialization = GoogleSignIn.instance.initialize();
+  }
 
   @override
   void dispose() {
@@ -31,8 +43,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     super.dispose();
   }
 
+  // ------------------------------------------------------------
+  // CREATE ACCOUNT WITH EMAIL AND PASSWORD
+  // ------------------------------------------------------------
+
   Future<void> _createAccount() async {
-    if (_isCreatingAccount) return;
+    if (_isCreatingAccount || _isGoogleSigningIn) return;
 
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
@@ -41,7 +57,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
     // Basic validation
     if (name.isEmpty) {
-      _showMessage('Please sign up.');
+      _showMessage('Please enter your name.');
       return;
     }
 
@@ -70,7 +86,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       return;
     }
 
-    // Close the keyboard
     FocusScope.of(context).unfocus();
 
     setState(() {
@@ -78,19 +93,19 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     });
 
     try {
-      // Create the Firebase account
+      // Create the Firebase account.
       final UserCredential credential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
 
-      // Save the user's chosen name to their Firebase profile
+      // Save the user's chosen name.
       await credential.user?.updateDisplayName(name);
 
-      // Refresh the Firebase user information
+      // Refresh Firebase user information.
       await credential.user?.reload();
 
       if (!mounted) return;
 
-      // Account created successfully
+      // Account created successfully.
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const HomeScreen()),
       );
@@ -146,7 +161,97 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     }
   }
 
+  // ------------------------------------------------------------
+  // GOOGLE SIGN-IN
+  // ------------------------------------------------------------
+
+  Future<void> _signInWithGoogle() async {
+    if (_isCreatingAccount || _isGoogleSigningIn) return;
+
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _isGoogleSigningIn = true;
+    });
+
+    try {
+      // Wait for the one-time initialization.
+      await _googleSignInInitialization;
+
+      final googleSignIn = GoogleSignIn.instance;
+
+      // Open Google's account chooser.
+      final GoogleSignInAccount googleUser = await googleSignIn.authenticate();
+
+      // Get Google's authentication information.
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      // Create a Firebase credential using Google's ID token.
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      // Sign in to Firebase.
+      await FirebaseAuth.instance.signInWithCredential(credential);
+
+      if (!mounted) return;
+
+      // Google sign-in successful.
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+    } on GoogleSignInException catch (error) {
+      if (!mounted) return;
+
+      if (error.code == GoogleSignInExceptionCode.canceled) {
+        _showMessage('Google sign-in was cancelled.');
+      } else {
+        _showMessage('Unable to sign in with Google. Please try again.');
+      }
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+
+      String message;
+
+      switch (error.code) {
+        case 'account-exists-with-different-credential':
+          message = 'An account already exists with this email. Please use your email and password.';
+          break;
+
+        case 'network-request-failed':
+          message = 'Please check your internet connection and try again.';
+          break;
+
+        case 'user-disabled':
+          message = 'This account has been disabled.';
+          break;
+
+        default:
+          message = 'Unable to sign in with Google. Please try again.';
+      }
+
+      _showMessage(message);
+    } catch (_) {
+      if (!mounted) return;
+
+      _showMessage('Unable to sign in with Google. Please try again.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGoogleSigningIn = false;
+        });
+      }
+    }
+  }
+
+  // ------------------------------------------------------------
+  // MESSAGE
+  // ------------------------------------------------------------
+
   void _showMessage(String message) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -161,8 +266,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       );
   }
 
+  // ------------------------------------------------------------
+  // BUILD
+  // ------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
+    final bool isBusy = _isCreatingAccount || _isGoogleSigningIn;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFFF4F7),
       body: SafeArea(
@@ -171,9 +282,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Back button
+              // --------------------------------------------------
+              // BACK BUTTON
+              // --------------------------------------------------
+
               IconButton(
-                onPressed: _isCreatingAccount
+                onPressed: isBusy
                     ? null
                     : () {
                         Navigator.pop(context);
@@ -186,7 +300,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
               const SizedBox(height: 10),
 
-              // Butterfly
+              // --------------------------------------------------
+              // BUTTERFLY
+              // --------------------------------------------------
               Center(
                 child: Image.asset(
                   'assets/images/butterfly.png',
@@ -198,7 +314,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
               const SizedBox(height: 18),
 
-              // Title
+              // --------------------------------------------------
+              // TITLE
+              // --------------------------------------------------
               const Center(
                 child: Text(
                   'Create your brié space',
@@ -213,7 +331,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
               const SizedBox(height: 10),
 
-              // Subtitle
+              // --------------------------------------------------
+              // SUBTITLE
+              // --------------------------------------------------
               const Center(
                 child: Text(
                   'A little space that belongs to you.',
@@ -224,7 +344,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
               const SizedBox(height: 35),
 
-              // Name
+              // --------------------------------------------------
+              // NAME
+              // --------------------------------------------------
               const Text(
                 'What should we call you?',
                 style: TextStyle(
@@ -239,7 +361,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               TextField(
                 controller: _nameController,
                 textCapitalization: TextCapitalization.words,
-                enabled: !_isCreatingAccount,
+                enabled: !isBusy,
                 decoration: _inputDecoration(
                   hintText: 'Your name',
                   icon: Icons.person_outline,
@@ -248,7 +370,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
               const SizedBox(height: 18),
 
-              // Email
+              // --------------------------------------------------
+              // EMAIL
+              // --------------------------------------------------
               const Text(
                 'Email',
                 style: TextStyle(
@@ -263,7 +387,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                enabled: !_isCreatingAccount,
+                enabled: !isBusy,
                 decoration: _inputDecoration(
                   hintText: 'you@example.com',
                   icon: Icons.email_outlined,
@@ -272,7 +396,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
               const SizedBox(height: 18),
 
-              // Password
+              // --------------------------------------------------
+              // PASSWORD
+              // --------------------------------------------------
               const Text(
                 'Password',
                 style: TextStyle(
@@ -287,12 +413,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
-                enabled: !_isCreatingAccount,
+                enabled: !isBusy,
                 decoration: _inputDecoration(
                   hintText: 'Create a password',
                   icon: Icons.lock_outline,
                   suffixIcon: IconButton(
-                    onPressed: _isCreatingAccount
+                    onPressed: isBusy
                         ? null
                         : () {
                             setState(() {
@@ -311,7 +437,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
               const SizedBox(height: 18),
 
-              // Confirm password
+              // --------------------------------------------------
+              // CONFIRM PASSWORD
+              // --------------------------------------------------
               const Text(
                 'Confirm password',
                 style: TextStyle(
@@ -326,12 +454,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               TextField(
                 controller: _confirmPasswordController,
                 obscureText: _obscureConfirmPassword,
-                enabled: !_isCreatingAccount,
+                enabled: !isBusy,
                 decoration: _inputDecoration(
                   hintText: 'Enter your password again',
                   icon: Icons.lock_outline,
                   suffixIcon: IconButton(
-                    onPressed: _isCreatingAccount
+                    onPressed: isBusy
                         ? null
                         : () {
                             setState(() {
@@ -351,12 +479,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
               const SizedBox(height: 28),
 
-              // Create account button
+              // --------------------------------------------------
+              // CREATE ACCOUNT BUTTON
+              // --------------------------------------------------
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _isCreatingAccount ? null : _createAccount,
+                  onPressed: isBusy ? null : _createAccount,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFE58BA7),
                     disabledBackgroundColor: const Color(0xFFE8B6C5),
@@ -390,7 +520,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
               const SizedBox(height: 25),
 
-              // Divider
+              // --------------------------------------------------
+              // DIVIDER
+              // --------------------------------------------------
               Row(
                 children: [
                   Expanded(child: Divider(color: Colors.grey.shade300)),
@@ -407,18 +539,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
               const SizedBox(height: 20),
 
-              // Google button
+              // --------------------------------------------------
+              // GOOGLE BUTTON
+              // --------------------------------------------------
               SizedBox(
                 width: double.infinity,
                 height: 54,
                 child: OutlinedButton(
-                  onPressed: _isCreatingAccount
-                      ? null
-                      : () {
-                          _showMessage(
-                            'Google sign-in will be connected next.',
-                          );
-                        },
+                  onPressed: isBusy ? null : _signInWithGoogle,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF6D4A5B),
                     side: BorderSide(color: Colors.grey.shade300),
@@ -426,33 +554,44 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.g_mobiledata,
-                        size: 30,
-                        color: Color(0xFF6D4A5B),
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Continue with Google',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
+                  child: _isGoogleSigningIn
+                      ? const SizedBox(
+                          width: 23,
+                          height: 23,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Color(0xFFE58BA7),
+                          ),
+                        )
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.g_mobiledata,
+                              size: 30,
+                              color: Color(0xFF6D4A5B),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Continue with Google',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
 
               const SizedBox(height: 25),
 
-              // Login link
+              // --------------------------------------------------
+              // LOGIN LINK
+              // --------------------------------------------------
               Center(
                 child: TextButton(
-                  onPressed: _isCreatingAccount
+                  onPressed: isBusy
                       ? null
                       : () {
                           Navigator.pushReplacement(
@@ -487,6 +626,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       ),
     );
   }
+
+  // ------------------------------------------------------------
+  // INPUT DECORATION
+  // ------------------------------------------------------------
 
   InputDecoration _inputDecoration({
     required String hintText,
