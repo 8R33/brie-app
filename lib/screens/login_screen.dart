@@ -2,8 +2,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-import 'home_screen.dart';
+import 'main_navigation_screen.dart';
 import 'create_account_screen.dart';
+
+import '../services/app_lock_service.dart';
+import '../services/security_status_service.dart';
+
+import 'security_setup_screen.dart';
+
+import 'reinstall_security_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -39,6 +46,46 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ------------------------------------------------------------
+  // AFTER AUTHENTICATION
+  // ------------------------------------------------------------
+
+  Future<void> _goAfterAuthentication() async {
+    // First check whether the local PIN/password still exists.
+    final hasLocalLock = await AppLockService.instance.hasLock();
+
+    if (!mounted) return;
+
+    // Normal login on a device where the local lock still exists.
+    if (hasLocalLock) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
+      );
+      return;
+    }
+
+    // The local lock is missing. Now check Firestore to see
+    // whether this account had already configured security before.
+    final hasExistingSecurity = await SecurityStatusService.instance
+        .hasExistingSecuritySetup();
+
+    if (!mounted) return;
+
+    if (hasExistingSecurity) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const ReinstallSecurityScreen(),
+        ),
+      );
+      return;
+    }
+
+    // Completely new account with no previous security setup.
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const SecuritySetupScreen()),
+    );
+  }
+
+  // ------------------------------------------------------------
   // LOGIN
   // ------------------------------------------------------------
 
@@ -68,11 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
         password: password,
       );
 
-      if (!mounted) return;
-
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+      await _goAfterAuthentication();
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
 
@@ -149,23 +192,21 @@ class _LoginScreenState extends State<LoginScreen> {
       final GoogleSignInAccount googleUser = await googleSignIn.authenticate();
 
       // Get the Google authentication information.
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null || idToken.isEmpty) {
+        throw StateError('Google sign-in did not return an ID token.');
+      }
 
       // Create a Firebase credential using Google's ID token.
-      final credential = GoogleAuthProvider.credential(
-        idToken: googleAuth.idToken,
-      );
+      final credential = GoogleAuthProvider.credential(idToken: idToken);
 
       // Sign in to Firebase with the Google credential.
       await FirebaseAuth.instance.signInWithCredential(credential);
 
-      if (!mounted) return;
-
-      // Go to Home after successful sign-in.
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+      await _goAfterAuthentication();
     } on GoogleSignInException catch (e) {
       if (!mounted) return;
 
@@ -181,7 +222,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       switch (e.code) {
         case 'account-exists-with-different-credential':
-          message = 'An account already exists with this email. Please use your email and password.';
+          message =
+              'An account already exists with this email. '
+              'Please use your email and password.';
           break;
 
         case 'network-request-failed':
@@ -556,20 +599,20 @@ class _LoginScreenState extends State<LoginScreen> {
                             color: Color(0xFFE58BA7),
                           ),
                         )
-                      : const Row(
+                      : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              Icons.g_mobiledata,
-                              size: 30,
-                              color: Color(0xFF6D4A5B),
+                            Image.asset(
+                              'assets/images/google_g.png',
+                              width: 22,
+                              height: 22,
                             ),
-                            SizedBox(width: 8),
-                            Text(
+                            const SizedBox(width: 12),
+                            const Text(
                               'Continue with Google',
                               style: TextStyle(
                                 fontSize: 15,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],

@@ -10,7 +10,7 @@ import 'package:video_player/video_player.dart';
 import 'breathe_screen.dart';
 import 'camera_screen.dart';
 import 'video_edit_screen.dart';
-import 'home_screen.dart';
+import 'main_navigation_screen.dart';
 import 'write_screen.dart';
 
 class CreateScreen extends StatefulWidget {
@@ -330,7 +330,7 @@ class _CreateScreenState extends State<CreateScreen> {
 
   void _goHome() {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
     );
   }
 
@@ -1728,7 +1728,7 @@ class _MeComingSoonScreen extends StatelessWidget {
 
   void _goHome(BuildContext context) {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
     );
   }
 

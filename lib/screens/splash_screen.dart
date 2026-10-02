@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import 'home_screen.dart';
+import '../services/app_lock_service.dart';
+import 'security_lock_screen.dart';
+import 'security_setup_screen.dart';
 import 'welcome_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -51,67 +53,49 @@ class _SplashScreenState extends State<SplashScreen>
 
     final user = FirebaseAuth.instance.currentUser;
 
-    // No Firebase user is logged in.
+    // No Firebase user → Welcome
     if (user == null) {
       _goToWelcome();
       return;
     }
 
-    // Use the authenticated session's sign-in time without requiring an
-    // additional persistence package.
-    final sessionStart = user.metadata.lastSignInTime?.millisecondsSinceEpoch;
+    // Firebase user exists.
+    // Now check whether the brié app lock has been configured.
+    final hasLock = await AppLockService.instance.hasLock();
 
-    // No session timestamp means we don't have a valid app session.
-    if (sessionStart == null) {
-      await FirebaseAuth.instance.signOut();
-      _goToWelcome();
+    if (!mounted) return;
+
+    // No app lock yet → Security Setup
+    if (!hasLock) {
+      _goToSecuritySetup();
       return;
     }
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    // 10 minutes in milliseconds.
-    const sessionDuration = 10 * 60 * 1000;
-
-    final sessionAge = now - sessionStart;
-
-    if (sessionAge >= sessionDuration) {
-      // The 10-minute session has expired.
-      await FirebaseAuth.instance.signOut();
-
-      _goToWelcome();
-      return;
-    }
-
-    // Session is still valid.
-    _goToHome();
+    // App lock exists → Lock Screen
+    _goToLockScreen();
   }
 
   void _goToWelcome() {
     if (!mounted) return;
 
     Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const WelcomeScreen(),
-        transitionDuration: const Duration(milliseconds: 700),
-        transitionsBuilder: (_, animation, __, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-      ),
+      MaterialPageRoute(builder: (context) => const WelcomeScreen()),
     );
   }
 
-  void _goToHome() {
+  void _goToSecuritySetup() {
     if (!mounted) return;
 
     Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const HomeScreen(),
-        transitionDuration: const Duration(milliseconds: 700),
-        transitionsBuilder: (_, animation, __, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-      ),
+      MaterialPageRoute(builder: (context) => const SecuritySetupScreen()),
+    );
+  }
+
+  void _goToLockScreen() {
+    if (!mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const SecurityLockScreen()),
     );
   }
 

@@ -43,6 +43,10 @@ dependencies:
   firebase_core: ^4.15.0
   firebase_auth: ^6.7.0
   google_sign_in: ^7.2.0
+  local_auth: ^3.0.2
+  flutter_secure_storage: ^11.2.0
+  crypto: ^3.0.7
+  cloud_firestore: ^6.10.0
 
 dev_dependencies:
   flutter_test:
@@ -70,6 +74,7 @@ flutter:
   assets:
     - assets/images/butterfly.png
     - assets/images/brie_logo.png
+    - assets/images/google_g.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

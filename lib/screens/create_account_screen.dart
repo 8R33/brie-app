@@ -2,8 +2,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-import 'home_screen.dart';
 import 'login_screen.dart';
+import 'security_setup_screen.dart';
+import '../services/app_lock_service.dart';
+import 'main_navigation_screen.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key});
@@ -41,6 +43,24 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  // ------------------------------------------------------------
+  // AFTER AUTHENTICATION
+  // ------------------------------------------------------------
+
+  Future<void> _goAfterAuthentication() async {
+    final hasLock = await AppLockService.instance.hasLock();
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) => hasLock
+            ? const MainNavigationScreen()
+            : const SecuritySetupScreen(),
+      ),
+    );
   }
 
   // ------------------------------------------------------------
@@ -106,9 +126,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       if (!mounted) return;
 
       // Account created successfully.
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+      // The user must now create their brié app lock.
+      await _goAfterAuthentication();
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
 
@@ -116,7 +135,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
       switch (error.code) {
         case 'email-already-in-use':
-          message = 'An account with this email already exists. Try logging in instead.';
+          message =
+              'An account with this email already exists. '
+              'Try logging in instead.';
           break;
 
         case 'invalid-email':
@@ -134,7 +155,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           break;
 
         case 'network-request-failed':
-          message = 'We could not connect to Firebase. Please check your internet connection.';
+          message =
+              'We could not connect to Firebase. '
+              'Please check your internet connection.';
           break;
 
         case 'too-many-requests':
@@ -184,13 +207,16 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       final GoogleSignInAccount googleUser = await googleSignIn.authenticate();
 
       // Get Google's authentication information.
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null || idToken.isEmpty) {
+        throw StateError('Google sign-in did not return an ID token.');
+      }
 
       // Create a Firebase credential using Google's ID token.
-      final credential = GoogleAuthProvider.credential(
-        idToken: googleAuth.idToken,
-      );
+      final credential = GoogleAuthProvider.credential(idToken: idToken);
 
       // Sign in to Firebase.
       await FirebaseAuth.instance.signInWithCredential(credential);
@@ -198,9 +224,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       if (!mounted) return;
 
       // Google sign-in successful.
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+      // Check whether brié security has already been configured.
+      await _goAfterAuthentication();
     } on GoogleSignInException catch (error) {
       if (!mounted) return;
 
@@ -216,7 +241,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
       switch (error.code) {
         case 'account-exists-with-different-credential':
-          message = 'An account already exists with this email. Please use your email and password.';
+          message =
+              'An account already exists with this email. '
+              'Please use your email and password.';
           break;
 
         case 'network-request-failed':
@@ -563,20 +590,20 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             color: Color(0xFFE58BA7),
                           ),
                         )
-                      : const Row(
+                      : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              Icons.g_mobiledata,
-                              size: 30,
-                              color: Color(0xFF6D4A5B),
+                            Image.asset(
+                              'assets/images/google_g.png',
+                              width: 22,
+                              height: 22,
                             ),
-                            SizedBox(width: 8),
-                            Text(
+                            const SizedBox(width: 12),
+                            const Text(
                               'Continue with Google',
                               style: TextStyle(
                                 fontSize: 15,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
