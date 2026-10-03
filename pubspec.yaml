@@ -47,6 +47,7 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   crypto: ^3.0.7
   cloud_firestore: ^6.10.0
+  image_cropper: ^12.2.1
 
 dev_dependencies:
   flutter_test:

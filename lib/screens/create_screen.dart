@@ -7,10 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 
-import 'breathe_screen.dart';
 import 'camera_screen.dart';
 import 'video_edit_screen.dart';
-import 'main_navigation_screen.dart';
 import 'write_screen.dart';
 
 class CreateScreen extends StatefulWidget {
@@ -22,6 +20,7 @@ class CreateScreen extends StatefulWidget {
 
 class _CreateScreenState extends State<CreateScreen> {
   final ImagePicker _picker = ImagePicker();
+
   final List<_Creation> _creations = [];
 
   @override
@@ -60,6 +59,10 @@ class _CreateScreenState extends State<CreateScreen> {
     ]);
   }
 
+  // ===============================================================
+  // CREATE MENU
+  // ===============================================================
+
   void _showCreateMenu() {
     showModalBottomSheet(
       context: context,
@@ -83,7 +86,9 @@ class _CreateScreenState extends State<CreateScreen> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                 ),
+
                 const SizedBox(height: 20),
+
                 const Text(
                   'Create',
                   style: TextStyle(
@@ -92,13 +97,17 @@ class _CreateScreenState extends State<CreateScreen> {
                     color: Color(0xFF5A4050),
                   ),
                 ),
+
                 const SizedBox(height: 6),
+
                 const Text(
                   'Choose a little way to make something.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 14, color: Color(0xFF8B727D)),
                 ),
+
                 const SizedBox(height: 22),
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -144,13 +153,17 @@ class _CreateScreenState extends State<CreateScreen> {
     );
   }
 
+  // ===============================================================
+  // WRITE
+  // ===============================================================
+
   Future<void> _openWrite() async {
     final result = await Navigator.of(context)
-        .push(MaterialPageRoute(builder: (context) => const WriteScreen()));
+        .push<String>(MaterialPageRoute(builder: (_) => const WriteScreen()));
 
     if (!mounted) return;
 
-    if (result is String && result.trim().isNotEmpty) {
+    if (result != null && result.trim().isNotEmpty) {
       setState(() {
         _creations.insert(
           0,
@@ -165,44 +178,49 @@ class _CreateScreenState extends State<CreateScreen> {
     }
   }
 
+  // ===============================================================
+  // CAMERA
+  // ===============================================================
+
   Future<void> _openCamera() async {
-    while (mounted) {
-      try {
-        final XFile? media = await Navigator.of(
-          context,
-        ).push<XFile>(MaterialPageRoute(builder: (_) => const CameraScreen()));
+    try {
+      final XFile? media = await Navigator.of(context)
+          .push<XFile>(MaterialPageRoute(builder: (_) => const CameraScreen()));
 
-        if (media == null) return;
+      if (media == null || !mounted) return;
 
-        final isVideo = _looksLikeVideo(media.path);
-        final draft = await _showCapturedMediaPreview(
-          file: File(media.path),
-          isVideo: isVideo,
+      final isVideo = _looksLikeVideo(media.path);
+
+      final draft = await _showCapturedMediaPreview(
+        file: File(media.path),
+        isVideo: isVideo,
+      );
+
+      if (!mounted || draft == null || !draft.post) return;
+
+      setState(() {
+        _creations.insert(
+          0,
+          _Creation(
+            type: isVideo ? CreationType.video : CreationType.image,
+            title: '',
+            description: '',
+            comment: draft.comment,
+            comments: const [],
+            filePath: draft.filePath,
+          ),
         );
+      });
+    } catch (_) {
+      if (!mounted) return;
 
-        if (draft?.post == true && mounted) {
-          setState(() {
-            _creations.insert(
-              0,
-              _Creation(
-                type: isVideo ? CreationType.video : CreationType.image,
-                title: '',
-                description: '',
-                comment: draft!.comment,
-                comments: const [],
-                filePath: draft.filePath,
-              ),
-            );
-          });
-          return;
-        }
-      } catch (_) {
-        if (!mounted) return;
-        _showError('Could not open the camera.');
-        return;
-      }
+      _showError('Could not open the camera.');
     }
   }
+
+  // ===============================================================
+  // GALLERY
+  // ===============================================================
 
   Future<void> _pickFromGallery() async {
     try {
@@ -210,26 +228,27 @@ class _CreateScreenState extends State<CreateScreen> {
         imageQuality: 90,
       );
 
-      if (files.isEmpty) return;
+      if (files.isEmpty || !mounted) return;
 
-      final selected = <_Creation>[];
+      final List<_Creation> selected = [];
 
       for (final file in files) {
         if (!mounted) return;
 
-        final isVideo = _looksLikeVideo(file.path);
+        final bool isVideo = _looksLikeVideo(file.path);
+
         final draft = await _showCapturedMediaPreview(
           file: File(file.path),
           isVideo: isVideo,
         );
 
-        if (draft?.post == true) {
+        if (draft != null && draft.post) {
           selected.add(
             _Creation(
               type: isVideo ? CreationType.video : CreationType.image,
               title: '',
               description: '',
-              comment: draft!.comment,
+              comment: draft.comment,
               comments: const [],
               filePath: draft.filePath,
             ),
@@ -239,31 +258,33 @@ class _CreateScreenState extends State<CreateScreen> {
 
       if (!mounted || selected.isEmpty) return;
 
-      setState(() => _creations.insertAll(0, selected));
+      setState(() {
+        _creations.insertAll(0, selected);
+      });
     } catch (_) {
       if (!mounted) return;
+
       _showError('We could not access the gallery. Please try again.');
     }
   }
 
-  bool _looksLikeVideo(String path) {
-    final lower = path.toLowerCase();
-    return lower.endsWith('.mp4') ||
-        lower.endsWith('.mov') ||
-        lower.endsWith('.avi') ||
-        lower.endsWith('.mkv') ||
-        lower.endsWith('.webm') ||
-        lower.endsWith('.3gp') ||
-        lower.endsWith('.m4v');
-  }
+  // ===============================================================
+  // FILE
+  // ===============================================================
 
   Future<void> _pickFile() async {
     try {
-      final PlatformFile? picked = await FilePicker.pickFile();
+      final List<PlatformFile>? result = await FilePicker.pickFiles();
 
-      if (picked == null) return;
+      if (result == null || result.isEmpty) {
+        return;
+      }
+
+      final picked = result.first;
 
       if (picked.path == null) {
+        if (!mounted) return;
+
         _showError('We could not access that file.');
         return;
       }
@@ -284,8 +305,25 @@ class _CreateScreenState extends State<CreateScreen> {
       });
     } catch (_) {
       if (!mounted) return;
+
       _showError('Could not upload the file.');
     }
+  }
+
+  // ===============================================================
+  // MEDIA HELPERS
+  // ===============================================================
+
+  bool _looksLikeVideo(String path) {
+    final String lower = path.toLowerCase();
+
+    return lower.endsWith('.mp4') ||
+        lower.endsWith('.mov') ||
+        lower.endsWith('.avi') ||
+        lower.endsWith('.mkv') ||
+        lower.endsWith('.webm') ||
+        lower.endsWith('.3gp') ||
+        lower.endsWith('.m4v');
   }
 
   Future<_PostDraft?> _showCapturedMediaPreview({
@@ -295,14 +333,20 @@ class _CreateScreenState extends State<CreateScreen> {
     return showDialog<_PostDraft>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _CapturedMediaDialog(file: file, isVideo: isVideo),
+      builder: (_) {
+        return _CapturedMediaDialog(file: file, isVideo: isVideo);
+      },
     );
   }
+
+  // ===============================================================
+  // CREATION DETAIL
+  // ===============================================================
 
   void _openCreation(_Creation creation) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => CreationDetailScreen(
+        builder: (_) => CreationDetailScreen(
           creation: creation,
           recommendations: _creations,
         ),
@@ -310,16 +354,22 @@ class _CreateScreenState extends State<CreateScreen> {
     );
   }
 
+  // ===============================================================
+  // ERROR
+  // ===============================================================
+
   void _showError(String message) {
-    showDialog(
+    showDialog<void>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Something went wrong'),
           content: Text(message),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
               child: const Text('OK'),
             ),
           ],
@@ -328,103 +378,90 @@ class _CreateScreenState extends State<CreateScreen> {
     );
   }
 
-  void _goHome() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
-    );
-  }
-
-  void _goBreathe() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const BreatheScreen()),
-    );
-  }
-
-  void _goMe() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const _MeComingSoonScreen()),
-    );
-  }
+  // ===============================================================
+  // BUILD
+  // ===============================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF4F7),
+
       body: SafeArea(
-        child: Stack(
-          children: [
-            CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 28, 22, 18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Create',
-                          textAlign: TextAlign.left,
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF5A4050),
-                            height: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'A little space to make something yours.',
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                            fontSize: 14,
-                            height: 1.45,
-                            color: Color(0xFF8B727D),
-                          ),
-                        ),
-                      ],
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 28, 22, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'Create',
+                      style: TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF5A4050),
+                        height: 1.1,
+                      ),
+                    ),
+
+                    SizedBox(height: 8),
+
+                    Text(
+                      'A little space to make something yours.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.45,
+                        color: Color(0xFF8B727D),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            if (_creations.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Text(
+                    'Nothing here yet.\nTap + to create something.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      height: 1.5,
+                      color: Color(0xFF8B727D),
                     ),
                   ),
                 ),
-                if (_creations.isEmpty)
-                  const SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: Text(
-                        'Nothing here yet.\nTap + to create something.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 16,
-                          height: 1.5,
-                          color: Color(0xFF8B727D),
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(18, 4, 18, 120),
-                    sliver: SliverGrid(
-                      delegate: SliverChildBuilderDelegate((context, index) {
-                        final creation = _creations[index];
-                        return _CreationCard(
-                          creation: creation,
-                          onTap: () => _openCreation(creation),
-                        );
-                      }, childCount: _creations.length),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 14,
-                            mainAxisSpacing: 18,
-                            childAspectRatio: 0.72,
-                          ),
-                    ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(18, 4, 18, 120),
+                sliver: SliverGrid(
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final creation = _creations[index];
+
+                    return _CreationCard(
+                      creation: creation,
+                      onTap: () {
+                        _openCreation(creation);
+                      },
+                    );
+                  }, childCount: _creations.length),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 14,
+                    mainAxisSpacing: 18,
+                    childAspectRatio: 0.72,
                   ),
-              ],
-            ),
+                ),
+              ),
           ],
         ),
       ),
+
       floatingActionButton: FloatingActionButton(
         onPressed: _showCreateMenu,
         backgroundColor: const Color(0xFFC75D83),
@@ -433,53 +470,19 @@ class _CreateScreenState extends State<CreateScreen> {
         shape: const CircleBorder(),
         child: const Icon(Icons.add_rounded, size: 30),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 2,
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: const Color(0xFFC75D83),
-        unselectedItemColor: const Color(0xFF9C8A92),
-        elevation: 8,
-        onTap: (index) {
-          if (index == 0) {
-            _goHome();
-            return;
-          }
-          if (index == 1) {
-            _goBreathe();
-            return;
-          }
-          if (index == 2) return;
-          if (index == 3) {
-            _goMe();
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.spa_outlined),
-            activeIcon: Icon(Icons.spa),
-            label: 'Breathe',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.auto_awesome_outlined),
-            activeIcon: Icon(Icons.auto_awesome),
-            label: 'Create',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Me',
-          ),
-        ],
-      ),
+
+      // IMPORTANT:
+      // There is NO bottom navigation here.
+      //
+      // MainNavigationScreen owns the permanent
+      // Home / Create / Me navigation.
     );
   }
 }
+
+// ===================================================================
+// CREATION TYPES
+// ===================================================================
 
 enum CreationType { image, video, text, file }
 
@@ -515,6 +518,10 @@ class _PostDraft {
   });
 }
 
+// ===================================================================
+// CREATE OPTION
+// ===================================================================
+
 class _CreateOption extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -541,7 +548,9 @@ class _CreateOption extends StatelessWidget {
             ),
             child: Icon(icon, color: const Color(0xFFC75D83), size: 27),
           ),
+
           const SizedBox(height: 8),
+
           Text(
             label,
             style: const TextStyle(fontSize: 13, color: Color(0xFF5A4050)),
@@ -551,6 +560,10 @@ class _CreateOption extends StatelessWidget {
     );
   }
 }
+
+// ===================================================================
+// CREATION CARD
+// ===================================================================
 
 class _CreationCard extends StatelessWidget {
   final _Creation creation;
@@ -584,15 +597,22 @@ class _CreationCard extends StatelessWidget {
     switch (creation.type) {
       case CreationType.image:
         return _ImageCreationCard(creation: creation);
+
       case CreationType.video:
         return _VideoCreationCard(creation: creation);
+
       case CreationType.text:
         return _TextCreationCard(creation: creation);
+
       case CreationType.file:
         return _FileCreationCard(creation: creation);
     }
   }
 }
+
+// ===================================================================
+// IMAGE CARD
+// ===================================================================
 
 class _ImageCreationCard extends StatelessWidget {
   final _Creation creation;
@@ -601,20 +621,17 @@ class _ImageCreationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AspectRatio(
-          aspectRatio: 1,
-          child: creation.filePath != null && !creation.isSample
-              ? Image.file(
-                  File(creation.filePath!),
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _placeholder(),
-                )
-              : _placeholder(),
-        ),
-      ],
+    return AspectRatio(
+      aspectRatio: 1,
+      child: creation.filePath != null && !creation.isSample
+          ? Image.file(
+              File(creation.filePath!),
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) {
+                return _placeholder();
+              },
+            )
+          : _placeholder(),
     );
   }
 
@@ -632,6 +649,10 @@ class _ImageCreationCard extends StatelessWidget {
   }
 }
 
+// ===================================================================
+// VIDEO CARD
+// ===================================================================
+
 class _VideoCreationCard extends StatefulWidget {
   final _Creation creation;
 
@@ -648,15 +669,18 @@ class _VideoCreationCardState extends State<_VideoCreationCard> {
   void initState() {
     super.initState();
 
-    if (widget.creation.filePath != null) {
-      _controller = VideoPlayerController.file(File(widget.creation.filePath!))
+    final path = widget.creation.filePath;
+
+    if (path != null) {
+      _controller = VideoPlayerController.file(File(path))
         ..setLooping(true)
         ..setVolume(0)
         ..initialize().then((_) {
-          if (mounted) {
-            setState(() {});
-            _controller?.play();
-          }
+          if (!mounted) return;
+
+          setState(() {});
+
+          _controller?.play();
         });
     }
   }
@@ -669,58 +693,66 @@ class _VideoCreationCardState extends State<_VideoCreationCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AspectRatio(
-          aspectRatio: 1,
-          child: _controller == null || !_controller!.value.isInitialized
-              ? Container(
-                  color: const Color(0xFFEFEAF5),
-                  child: const Center(
-                    child: Icon(
-                      Icons.play_circle_fill_rounded,
-                      size: 45,
-                      color: Color(0xFF9A82AE),
-                    ),
-                  ),
-                )
-              : Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.cover,
-                      child: SizedBox(
-                        width: _controller!.value.size.width,
-                        height: _controller!.value.size.height,
-                        child: VideoPlayer(_controller!),
-                      ),
-                    ),
-                    const Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Icon(
-                        Icons.volume_off_rounded,
-                        color: Colors.white,
-                        size: 20,
-                        shadows: [Shadow(blurRadius: 6)],
-                      ),
-                    ),
-                    const Center(
-                      child: Icon(
-                        Icons.play_circle_outline_rounded,
-                        color: Colors.white,
-                        size: 45,
-                        shadows: [Shadow(blurRadius: 8)],
-                      ),
-                    ),
-                  ],
-                ),
+    final controller = _controller;
+
+    if (controller == null || !controller.value.isInitialized) {
+      return AspectRatio(
+        aspectRatio: 1,
+        child: Container(
+          color: const Color(0xFFEFEAF5),
+          child: const Center(
+            child: Icon(
+              Icons.play_circle_fill_rounded,
+              size: 45,
+              color: Color(0xFF9A82AE),
+            ),
+          ),
         ),
-      ],
+      );
+    }
+
+    return AspectRatio(
+      aspectRatio: 1,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: controller.value.size.width,
+              height: controller.value.size.height,
+              child: VideoPlayer(controller),
+            ),
+          ),
+
+          const Positioned(
+            top: 10,
+            right: 10,
+            child: Icon(
+              Icons.volume_off_rounded,
+              color: Colors.white,
+              size: 20,
+              shadows: [Shadow(blurRadius: 6)],
+            ),
+          ),
+
+          const Center(
+            child: Icon(
+              Icons.play_circle_outline_rounded,
+              color: Colors.white,
+              size: 45,
+              shadows: [Shadow(blurRadius: 8)],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
+
+// ===================================================================
+// TEXT CARD
+// ===================================================================
 
 class _TextCreationCard extends StatelessWidget {
   final _Creation creation;
@@ -740,7 +772,9 @@ class _TextCreationCard extends StatelessWidget {
             color: Color(0xFFC75D83),
             size: 31,
           ),
+
           const SizedBox(height: 12),
+
           Text(
             creation.description,
             maxLines: 9,
@@ -751,7 +785,9 @@ class _TextCreationCard extends StatelessWidget {
               color: Color(0xFF5A4050),
             ),
           ),
+
           const Spacer(),
+
           Text(
             creation.title,
             maxLines: 2,
@@ -767,6 +803,10 @@ class _TextCreationCard extends StatelessWidget {
     );
   }
 }
+
+// ===================================================================
+// FILE CARD
+// ===================================================================
 
 class _FileCreationCard extends StatelessWidget {
   final _Creation creation;
@@ -794,7 +834,9 @@ class _FileCreationCard extends StatelessWidget {
               size: 27,
             ),
           ),
+
           const Spacer(),
+
           Text(
             creation.title,
             maxLines: 3,
@@ -805,7 +847,9 @@ class _FileCreationCard extends StatelessWidget {
               color: Color(0xFF385A45),
             ),
           ),
+
           const SizedBox(height: 5),
+
           Text(
             creation.description,
             maxLines: 2,
@@ -822,6 +866,10 @@ class _FileCreationCard extends StatelessWidget {
   }
 }
 
+// ===================================================================
+// CAPTURED MEDIA DIALOG
+// ===================================================================
+
 class _CapturedMediaDialog extends StatefulWidget {
   final File file;
   final bool isVideo;
@@ -834,37 +882,62 @@ class _CapturedMediaDialog extends StatefulWidget {
 
 class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
   late File _currentFile;
+
   VideoPlayerController? _videoController;
+
   late final TextEditingController _commentController;
+
   late final FocusNode _commentFocusNode;
+
   bool _muted = true;
   bool _loadingVideo = false;
 
   @override
   void initState() {
     super.initState();
+
     _currentFile = widget.file;
+
     _commentController = TextEditingController();
+
     _commentFocusNode = FocusNode();
-    if (widget.isVideo) _loadVideo();
+
+    if (widget.isVideo) {
+      _loadVideo();
+    }
   }
 
   Future<void> _loadVideo() async {
-    setState(() => _loadingVideo = true);
+    if (!mounted) return;
+
+    setState(() {
+      _loadingVideo = true;
+    });
+
     await _videoController?.dispose();
+
     final controller = VideoPlayerController.file(_currentFile);
+
     _videoController = controller;
 
     try {
       await controller.initialize();
       await controller.setLooping(true);
       await controller.setVolume(_muted ? 0 : 1);
-      if (mounted) {
-        setState(() => _loadingVideo = false);
-        await controller.play();
-      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _loadingVideo = false;
+      });
+
+      await controller.play();
     } catch (_) {
-      if (mounted) setState(() => _loadingVideo = false);
+      if (!mounted) return;
+
+      setState(() {
+        _loadingVideo = false;
+      });
     }
   }
 
@@ -875,9 +948,14 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
       MaterialPageRoute(builder: (_) => VideoEditScreen(file: _currentFile)),
     );
 
-    if (edited == null || !mounted) return;
+    if (edited == null || !mounted) {
+      return;
+    }
 
-    setState(() => _currentFile = edited);
+    setState(() {
+      _currentFile = edited;
+    });
+
     await _loadVideo();
   }
 
@@ -886,12 +964,13 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
     _commentController.dispose();
     _commentFocusNode.dispose();
     _videoController?.dispose();
+
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final ready =
+    final bool ready =
         !widget.isVideo ||
         (!_loadingVideo &&
             _videoController != null &&
@@ -924,8 +1003,11 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
                       ),
                     ),
                   ),
+
                   IconButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
                     icon: const Icon(
                       Icons.close_rounded,
                       color: Color(0xFF8B727D),
@@ -934,6 +1016,7 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
                 ],
               ),
             ),
+
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
@@ -946,33 +1029,14 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
                             ? _videoController!.value.aspectRatio
                             : 1,
                         child: widget.isVideo
-                            ? (ready
-                                  ? Stack(
-                                      fit: StackFit.expand,
-                                      alignment: Alignment.center,
-                                      children: [
-                                        VideoPlayer(_videoController!),
-                                        if (!_videoController!.value.isPlaying)
-                                          IconButton(
-                                            onPressed: _togglePlay,
-                                            icon: const Icon(
-                                              Icons.play_circle_fill,
-                                              color: Colors.white,
-                                              size: 64,
-                                            ),
-                                          ),
-                                      ],
-                                    )
-                                  : const Center(
-                                      child: CircularProgressIndicator(
-                                        color: Color(0xFFC75D83),
-                                      ),
-                                    ))
+                            ? _buildVideoPreview(ready)
                             : Image.file(_currentFile, fit: BoxFit.cover),
                       ),
                     ),
+
                     if (widget.isVideo && ready) ...[
                       const SizedBox(height: 8),
+
                       Row(
                         children: [
                           IconButton(
@@ -985,6 +1049,7 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
                               size: 34,
                             ),
                           ),
+
                           Expanded(
                             child: VideoProgressIndicator(
                               _videoController!,
@@ -995,6 +1060,7 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
                               ),
                             ),
                           ),
+
                           IconButton(
                             onPressed: _toggleMute,
                             icon: Icon(
@@ -1006,6 +1072,7 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
                           ),
                         ],
                       ),
+
                       OutlinedButton.icon(
                         onPressed: _editVideo,
                         icon: const Icon(Icons.tune_rounded),
@@ -1019,19 +1086,23 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
                         ),
                       ),
                     ],
+
                     const SizedBox(height: 12),
-                    Align(
+
+                    const Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
                         'Add a comment',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: Color(0xFF5A4050),
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 7),
+
                     TextField(
                       controller: _commentController,
                       focusNode: _commentFocusNode,
@@ -1050,12 +1121,16 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
                         contentPadding: const EdgeInsets.all(15),
                       ),
                     ),
+
                     const SizedBox(height: 8),
+
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
+                            onPressed: () {
+                              Navigator.pop(context);
+                            },
                             style: OutlinedButton.styleFrom(
                               minimumSize: const Size.fromHeight(50),
                               foregroundColor: const Color(0xFFC75D83),
@@ -1067,19 +1142,23 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
                             child: const Text('Retry'),
                           ),
                         ),
+
                         const SizedBox(width: 12),
+
                         Expanded(
                           child: FilledButton(
                             onPressed: !ready
                                 ? null
-                                : () => Navigator.pop(
-                                    context,
-                                    _PostDraft(
-                                      post: true,
-                                      comment: _commentController.text.trim(),
-                                      filePath: _currentFile.path,
-                                    ),
-                                  ),
+                                : () {
+                                    Navigator.pop(
+                                      context,
+                                      _PostDraft(
+                                        post: true,
+                                        comment: _commentController.text.trim(),
+                                        filePath: _currentFile.path,
+                                      ),
+                                    );
+                                  },
                             style: FilledButton.styleFrom(
                               minimumSize: const Size.fromHeight(50),
                               backgroundColor: const Color(0xFFC75D83),
@@ -1102,9 +1181,39 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
     );
   }
 
+  Widget _buildVideoPreview(bool ready) {
+    if (!ready) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFFC75D83)),
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      alignment: Alignment.center,
+      children: [
+        VideoPlayer(_videoController!),
+
+        if (!_videoController!.value.isPlaying)
+          IconButton(
+            onPressed: _togglePlay,
+            icon: const Icon(
+              Icons.play_circle_fill,
+              color: Colors.white,
+              size: 64,
+            ),
+          ),
+      ],
+    );
+  }
+
   void _togglePlay() {
     final controller = _videoController;
-    if (controller == null || !controller.value.isInitialized) return;
+
+    if (controller == null || !controller.value.isInitialized) {
+      return;
+    }
+
     setState(() {
       if (controller.value.isPlaying) {
         controller.pause();
@@ -1116,13 +1225,22 @@ class _CapturedMediaDialogState extends State<_CapturedMediaDialog> {
 
   void _toggleMute() {
     final controller = _videoController;
-    if (controller == null || !controller.value.isInitialized) return;
+
+    if (controller == null || !controller.value.isInitialized) {
+      return;
+    }
+
     setState(() {
       _muted = !_muted;
+
       controller.setVolume(_muted ? 0 : 1);
     });
   }
 }
+
+// ===================================================================
+// CREATION DETAIL
+// ===================================================================
 
 class CreationDetailScreen extends StatefulWidget {
   final _Creation creation;
@@ -1140,15 +1258,21 @@ class CreationDetailScreen extends StatefulWidget {
 
 class _CreationDetailScreenState extends State<CreationDetailScreen> {
   late final TextEditingController _commentController;
+
   late final FocusNode _commentFocusNode;
+
   late final List<String> _comments;
+
   bool _liked = false;
 
   @override
   void initState() {
     super.initState();
+
     _commentController = TextEditingController();
+
     _commentFocusNode = FocusNode();
+
     _comments = List<String>.from(widget.creation.comments);
   }
 
@@ -1156,11 +1280,13 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
   void dispose() {
     _commentController.dispose();
     _commentFocusNode.dispose();
+
     super.dispose();
   }
 
   void _addComment() {
     final text = _commentController.text.trim();
+
     if (text.isEmpty) return;
 
     setState(() {
@@ -1184,6 +1310,7 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFF4F7),
+
       appBar: AppBar(
         backgroundColor: const Color(0xFFFFF4F7),
         elevation: 0,
@@ -1202,6 +1329,7 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
           ),
         ],
       ),
+
       body: ListView(
         padding: const EdgeInsets.only(bottom: 40),
         children: [
@@ -1213,7 +1341,11 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
             child: Row(
               children: [
                 IconButton(
-                  onPressed: () => setState(() => _liked = !_liked),
+                  onPressed: () {
+                    setState(() {
+                      _liked = !_liked;
+                    });
+                  },
                   icon: Icon(
                     _liked ? Icons.favorite : Icons.favorite_border,
                     color: _liked
@@ -1222,7 +1354,9 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
                   ),
                   tooltip: 'Like',
                 ),
+
                 const SizedBox(width: 4),
+
                 IconButton(
                   onPressed: () {
                     FocusScope.of(context).requestFocus(_commentFocusNode);
@@ -1233,7 +1367,9 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
                   ),
                   tooltip: 'Comments',
                 ),
+
                 const SizedBox(width: 4),
+
                 IconButton(
                   onPressed: _shareCreation,
                   icon: const Icon(
@@ -1242,6 +1378,7 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
                   ),
                   tooltip: 'Share',
                 ),
+
                 const Spacer(),
                 IconButton(
                   onPressed: () {},
@@ -1296,6 +1433,7 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
                 ),
               ),
             ),
+
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18),
               child: GridView.builder(
@@ -1348,7 +1486,9 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
               color: Color(0xFF5A4050),
             ),
           ),
+
           const SizedBox(height: 12),
+
           if (_comments.isEmpty)
             const Padding(
               padding: EdgeInsets.only(bottom: 10),
@@ -1358,8 +1498,8 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
               ),
             )
           else
-            ..._comments.map(
-              (comment) => Container(
+            ..._comments.map((comment) {
+              return Container(
                 width: double.infinity,
                 margin: const EdgeInsets.only(bottom: 9),
                 padding: const EdgeInsets.symmetric(
@@ -1378,8 +1518,9 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
                     color: Color(0xFF5A4050),
                   ),
                 ),
-              ),
-            ),
+              );
+            }),
+
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -1417,7 +1558,9 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
                   ),
                 ),
               ),
+
               const SizedBox(width: 8),
+
               IconButton(
                 onPressed: _addComment,
                 style: IconButton.styleFrom(
@@ -1426,7 +1569,6 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
                   minimumSize: const Size(48, 48),
                 ),
                 icon: const Icon(Icons.arrow_upward_rounded),
-                tooltip: 'Post comment',
               ),
             ],
           ),
@@ -1501,6 +1643,10 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
     }
   }
 
+  // ===============================================================
+  // DOWNLOAD
+  // ===============================================================
+
   Future<void> _downloadCreation(BuildContext context) async {
     try {
       Uint8List bytes;
@@ -1509,10 +1655,14 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
 
       if (widget.creation.type == CreationType.text) {
         bytes = Uint8List.fromList(utf8.encode(widget.creation.description));
+
         fileName = '${_safeFileName(widget.creation.title)}.txt';
+
         mimeType = 'text/plain';
       } else {
-        if (widget.creation.filePath == null) {
+        final path = widget.creation.filePath;
+
+        if (path == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('This sample creation cannot be downloaded yet.'),
@@ -1521,7 +1671,7 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
           return;
         }
 
-        final file = File(widget.creation.filePath!);
+        final file = File(path);
 
         if (!await file.exists()) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1533,11 +1683,10 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
         }
 
         bytes = await file.readAsBytes();
-        fileName = _fileNameWithExtension(
-          widget.creation.title,
-          widget.creation.filePath!,
-        );
-        mimeType = _mimeTypeForPath(widget.creation.filePath!);
+
+        fileName = _fileNameWithExtension(widget.creation.title, path);
+
+        mimeType = _mimeTypeForPath(path);
       }
 
       final Uri? savedLocation = await FilePicker.saveFile(
@@ -1568,7 +1717,9 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
 
   String _fileNameWithExtension(String title, String originalPath) {
     final originalName = originalPath.split(Platform.pathSeparator).last;
+
     final dotIndex = originalName.lastIndexOf('.');
+
     final safeTitle = _safeFileName(title.trim());
 
     if (safeTitle.isEmpty) {
@@ -1577,6 +1728,7 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
 
     if (dotIndex != -1) {
       final extension = originalName.substring(dotIndex);
+
       return '$safeTitle$extension';
     }
 
@@ -1589,14 +1741,39 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
     if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
       return 'image/jpeg';
     }
-    if (lower.endsWith('.png')) return 'image/png';
-    if (lower.endsWith('.gif')) return 'image/gif';
-    if (lower.endsWith('.webp')) return 'image/webp';
-    if (lower.endsWith('.mp4')) return 'video/mp4';
-    if (lower.endsWith('.mov')) return 'video/quicktime';
-    if (lower.endsWith('.webm')) return 'video/webm';
-    if (lower.endsWith('.pdf')) return 'application/pdf';
-    if (lower.endsWith('.doc')) return 'application/msword';
+
+    if (lower.endsWith('.png')) {
+      return 'image/png';
+    }
+
+    if (lower.endsWith('.gif')) {
+      return 'image/gif';
+    }
+
+    if (lower.endsWith('.webp')) {
+      return 'image/webp';
+    }
+
+    if (lower.endsWith('.mp4')) {
+      return 'video/mp4';
+    }
+
+    if (lower.endsWith('.mov')) {
+      return 'video/quicktime';
+    }
+
+    if (lower.endsWith('.webm')) {
+      return 'video/webm';
+    }
+
+    if (lower.endsWith('.pdf')) {
+      return 'application/pdf';
+    }
+
+    if (lower.endsWith('.doc')) {
+      return 'application/msword';
+    }
+
     if (lower.endsWith('.docx')) {
       return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     }
@@ -1604,6 +1781,10 @@ class _CreationDetailScreenState extends State<CreationDetailScreen> {
     return 'application/octet-stream';
   }
 }
+
+// ===================================================================
+// DETAIL VIDEO PLAYER
+// ===================================================================
 
 class _DetailVideoPlayer extends StatefulWidget {
   final File file;
@@ -1624,7 +1805,9 @@ class _DetailVideoPlayerState extends State<_DetailVideoPlayer> {
     _controller = VideoPlayerController.file(widget.file)
       ..setLooping(false)
       ..initialize().then((_) {
-        if (mounted) setState(() {});
+        if (mounted) {
+          setState(() {});
+        }
       });
   }
 
@@ -1662,6 +1845,7 @@ class _DetailVideoPlayerState extends State<_DetailVideoPlayer> {
                 aspectRatio: _controller.value.aspectRatio,
                 child: VideoPlayer(_controller),
               ),
+
               if (!_controller.value.isPlaying)
                 const Icon(
                   Icons.play_circle_fill_rounded,
@@ -1672,6 +1856,7 @@ class _DetailVideoPlayerState extends State<_DetailVideoPlayer> {
             ],
           ),
         ),
+
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 18),
           child: Row(
@@ -1694,6 +1879,7 @@ class _DetailVideoPlayerState extends State<_DetailVideoPlayer> {
                   size: 34,
                 ),
               ),
+
               Expanded(
                 child: VideoProgressIndicator(
                   _controller,
@@ -1701,10 +1887,12 @@ class _DetailVideoPlayerState extends State<_DetailVideoPlayer> {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                 ),
               ),
+
               IconButton(
                 onPressed: () {
                   setState(() {
                     final volume = _controller.value.volume;
+
                     _controller.setVolume(volume == 0 ? 1 : 0);
                   });
                 },
@@ -1719,82 +1907,6 @@ class _DetailVideoPlayerState extends State<_DetailVideoPlayer> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _MeComingSoonScreen extends StatelessWidget {
-  const _MeComingSoonScreen();
-
-  void _goHome(BuildContext context) {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
-    );
-  }
-
-  void _goBreathe(BuildContext context) {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const BreatheScreen()),
-    );
-  }
-
-  void _goCreate(BuildContext context) {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const CreateScreen()),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFF4F7),
-      body: SafeArea(
-        child: Center(
-          child: Text(
-            'Me screen coming next 💗',
-            style: TextStyle(fontSize: 18, color: const Color(0xFF5A4050)),
-          ),
-        ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 3,
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: const Color(0xFFC75D83),
-        unselectedItemColor: const Color(0xFF9C8A92),
-        elevation: 8,
-        onTap: (index) {
-          if (index == 0) {
-            _goHome(context);
-          } else if (index == 1) {
-            _goBreathe(context);
-          } else if (index == 2) {
-            _goCreate(context);
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.spa_outlined),
-            activeIcon: Icon(Icons.spa),
-            label: 'Breathe',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.auto_awesome_outlined),
-            activeIcon: Icon(Icons.auto_awesome),
-            label: 'Create',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Me',
-          ),
-        ],
-      ),
     );
   }
 }
