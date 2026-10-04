@@ -5,6 +5,47 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'profile_screen.dart';
+import 'settings_screen.dart';
+
+class HelpSupportScreen extends StatelessWidget {
+  const HelpSupportScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Help & Support')),
+      body: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Help and support is not available in this build.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SecurityScreen extends StatelessWidget {
+  const SecurityScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Security')),
+      body: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Security settings are not available in this build.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class MeScreen extends StatefulWidget {
   const MeScreen({super.key});
@@ -107,7 +148,7 @@ class _MeScreenState extends State<MeScreen> {
       // BIO
       // =============================================================
 
-      String bio = data?['bio']?.toString().trim() ?? '';
+      final bio = data?['bio']?.toString().trim() ?? '';
 
       // =============================================================
       // LOCAL PROFILE PHOTO
@@ -233,6 +274,39 @@ class _MeScreenState extends State<MeScreen> {
     // =============================================================
 
     await _loadProfileData(showLoading: false);
+  }
+
+  // ===============================================================
+  // OPEN SETTINGS
+  // ===============================================================
+
+  Future<void> _openSettings() async {
+    _closeMenu();
+
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+  }
+
+  // ===============================================================
+  // OPEN SECURITY
+  // ===============================================================
+
+  Future<void> _openSecurity() async {
+    _closeMenu();
+
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const SecurityScreen()));
+  }
+
+  // ===============================================================
+  // OPEN HELP & SUPPORT
+  // ===============================================================
+
+  Future<void> _openHelpSupport() async {
+    _closeMenu();
+
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const HelpSupportScreen()));
   }
 
   // ===============================================================
@@ -690,12 +764,22 @@ class _MeScreenState extends State<MeScreen> {
   // ===============================================================
 
   Widget _buildSideMenu() {
-    final screenWidth = MediaQuery.of(context).size.width;
+    final screenWidth = MediaQuery.sizeOf(context).width;
 
-    final panelWidth = (screenWidth * 0.25).clamp(210.0, 260.0);
+    final screenHeight = MediaQuery.sizeOf(context).height;
+
+    final topPadding = MediaQuery.paddingOf(context).top;
+
+    final panelWidth = (screenWidth * 0.50).clamp(220.0, 360.0);
+
+    final panelHeight = screenHeight * 0.50;
 
     return Stack(
       children: [
+        // =========================================================
+        // OVERLAY
+        // =========================================================
+
         if (_menuOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -704,64 +788,81 @@ class _MeScreenState extends State<MeScreen> {
             ),
           ),
 
+        // =========================================================
+        // MENU PANEL
+        // =========================================================
         AnimatedPositioned(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
           left: _menuOpen ? 0 : -panelWidth,
-          top: 0,
-          bottom: 0,
+          top: topPadding,
+          width: panelWidth,
+          height: panelHeight,
           child: Material(
-            elevation: 8,
+            elevation: 10,
             color: Colors.white,
-            child: SizedBox(
-              width: panelWidth,
-              child: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(18, 22, 12, 18),
-                      child: Text(
-                        'Menu',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF5A4050),
-                        ),
+            borderRadius: const BorderRadius.only(
+              bottomRight: Radius.circular(24),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: SafeArea(
+              top: false,
+              bottom: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // =================================================
+                  // MENU TITLE
+                  // =================================================
+
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(22, 24, 16, 18),
+                    child: Text(
+                      'Menu',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF5A4050),
                       ),
                     ),
+                  ),
 
-                    _buildMenuItem(
-                      icon: Icons.person_outline,
-                      title: 'Profile',
-                      onTap: _openProfile,
-                    ),
+                  // =================================================
+                  // PROFILE
+                  // =================================================
+                  _buildMenuItem(
+                    icon: Icons.person_outline,
+                    title: 'Profile',
+                    onTap: _openProfile,
+                  ),
 
-                    _buildMenuItem(
-                      icon: Icons.settings_outlined,
-                      title: 'Settings',
-                      onTap: () {
-                        _showComingSoon('Settings');
-                      },
-                    ),
+                  // =================================================
+                  // SETTINGS
+                  // =================================================
+                  _buildMenuItem(
+                    icon: Icons.settings_outlined,
+                    title: 'Settings',
+                    onTap: _openSettings,
+                  ),
 
-                    _buildMenuItem(
-                      icon: Icons.lock_outline,
-                      title: 'Security',
-                      onTap: () {
-                        _showComingSoon('Security');
-                      },
-                    ),
+                  // =================================================
+                  // SECURITY
+                  // =================================================
+                  _buildMenuItem(
+                    icon: Icons.lock_outline,
+                    title: 'Security',
+                    onTap: _openSecurity,
+                  ),
 
-                    _buildMenuItem(
-                      icon: Icons.help_outline,
-                      title: 'Help & Support',
-                      onTap: () {
-                        _showComingSoon('Help & Support');
-                      },
-                    ),
-                  ],
-                ),
+                  // =================================================
+                  // HELP & SUPPORT
+                  // =================================================
+                  _buildMenuItem(
+                    icon: Icons.help_outline,
+                    title: 'Help & Support',
+                    onTap: _openHelpSupport,
+                  ),
+                ],
               ),
             ),
           ),
@@ -769,6 +870,10 @@ class _MeScreenState extends State<MeScreen> {
       ],
     );
   }
+
+  // ===============================================================
+  // MENU ITEM
+  // ===============================================================
 
   Widget _buildMenuItem({
     required IconData icon,
@@ -778,20 +883,33 @@ class _MeScreenState extends State<MeScreen> {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         child: Row(
           children: [
-            Icon(icon, size: 21, color: const Color(0xFFC75D83)),
-            const SizedBox(width: 12),
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFE9EF),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(icon, size: 22, color: const Color(0xFFC75D83)),
+            ),
+            const SizedBox(width: 14),
             Expanded(
               child: Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF5A4050),
                 ),
               ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 23,
+              color: Color(0xFF9C8A92),
             ),
           ],
         ),
@@ -939,14 +1057,14 @@ class _MeScreenState extends State<MeScreen> {
                     const SizedBox(height: 12),
 
                     // =================================================
-                    // NAME / USERNAME / BIO
+                    // PROFILE TEXT
                     // =================================================
                     _buildProfileText(),
 
                     const SizedBox(height: 16),
 
                     // =================================================
-                    // FOLLOWERS / FOLLOWING
+                    // FOLLOW STATS
                     // =================================================
                     _buildFollowStats(),
 
