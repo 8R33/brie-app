@@ -9,7 +9,6 @@ import '../services/app_lock_service.dart';
 import '../services/security_status_service.dart';
 
 import 'security_setup_screen.dart';
-
 import 'reinstall_security_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -20,7 +19,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
   final TextEditingController _emailController = TextEditingController();
+
   final TextEditingController _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
@@ -45,30 +47,105 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // ------------------------------------------------------------
+  // =============================================================
   // AFTER AUTHENTICATION
-  // ------------------------------------------------------------
+  // =============================================================
 
   Future<void> _goAfterAuthentication() async {
+    // -----------------------------------------------------------
+    // IMPORTANT:
+    // Always reload Firebase Auth before continuing.
+    //
+    // This makes sure that if the user's email was recently
+    // changed and verified, the current Firebase User contains
+    // the newest email information.
+    // -----------------------------------------------------------
+
+    try {
+      await _auth.currentUser?.reload();
+    } on FirebaseAuthException catch (e) {
+      debugPrint(
+        'Firebase user reload error: '
+        'code=${e.code}, message=${e.message}',
+      );
+
+      if (!mounted) return;
+
+      if (e.code == 'user-disabled') {
+        _showMessage('This account has been disabled.');
+        return;
+      }
+
+      if (e.code == 'user-not-found') {
+        _showMessage('Your account could not be found.');
+        return;
+      }
+
+      if (e.code == 'network-request-failed') {
+        _showMessage('Please check your internet connection and try again.');
+        return;
+      }
+    } catch (e) {
+      debugPrint('Unexpected Firebase user reload error: $e');
+    }
+
+    if (!mounted) return;
+
+    final refreshedUser = _auth.currentUser;
+
+    if (refreshedUser == null) {
+      _showMessage('Your session could not be restored. Please try again.');
+      return;
+    }
+
+    // -----------------------------------------------------------
+    // Log the current Auth email so it is easy to verify in the
+    // Flutter console that the new email is being used.
+    // -----------------------------------------------------------
+
+    debugPrint('Authenticated Firebase user:');
+
+    debugPrint('UID: ${refreshedUser.uid}');
+
+    debugPrint('Firebase Auth email: ${refreshedUser.email}');
+
+    debugPrint('Email verified: ${refreshedUser.emailVerified}');
+
+    // -----------------------------------------------------------
     // First check whether the local PIN/password still exists.
+    // -----------------------------------------------------------
+
     final hasLocalLock = await AppLockService.instance.hasLock();
 
     if (!mounted) return;
 
+    // -----------------------------------------------------------
     // Normal login on a device where the local lock still exists.
+    // -----------------------------------------------------------
+
     if (hasLocalLock) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
       );
+
       return;
     }
 
-    // The local lock is missing. Now check Firestore to see
-    // whether this account had already configured security before.
+    // -----------------------------------------------------------
+    // The local lock is missing.
+    //
+    // Check Firestore to see whether this account had already
+    // configured security before.
+    // -----------------------------------------------------------
+
     final hasExistingSecurity = await SecurityStatusService.instance
         .hasExistingSecuritySetup();
 
     if (!mounted) return;
+
+    // -----------------------------------------------------------
+    // Existing account that previously had security configured.
+    // -----------------------------------------------------------
 
     if (hasExistingSecurity) {
       Navigator.of(context).pushReplacement(
@@ -76,21 +153,26 @@ class _LoginScreenState extends State<LoginScreen> {
           builder: (context) => const ReinstallSecurityScreen(),
         ),
       );
+
       return;
     }
 
+    // -----------------------------------------------------------
     // Completely new account with no previous security setup.
+    // -----------------------------------------------------------
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (context) => const SecuritySetupScreen()),
     );
   }
 
-  // ------------------------------------------------------------
+  // =============================================================
   // LOGIN
-  // ------------------------------------------------------------
+  // =============================================================
 
   Future<void> _login() async {
     final email = _emailController.text.trim();
+
     final password = _passwordController.text;
 
     FocusScope.of(context).unfocus();
@@ -110,14 +192,61 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      // ---------------------------------------------------------
+      // Firebase uses the email currently entered by the user.
+      //
+      // Therefore, after an email change has been successfully
+      // verified, the NEW email will work here automatically.
+      // ---------------------------------------------------------
+
+      final credential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
 
+      // ---------------------------------------------------------
+      // Make sure the authenticated user is the latest Firebase
+      // version before continuing into PIN/password security.
+      // ---------------------------------------------------------
+
+      final signedInUser = credential.user;
+
+      if (signedInUser != null) {
+        await signedInUser.reload();
+      }
+
+      if (!mounted) return;
+
+      final refreshedUser = _auth.currentUser;
+
+      if (refreshedUser == null) {
+        _showMessage('Unable to load your account. Please try again.');
+        return;
+      }
+
+      debugPrint('Login successful.');
+
+      debugPrint('Login email entered: $email');
+
+      debugPrint(
+        'Firebase Auth email after reload: '
+        '${refreshedUser.email}',
+      );
+
+      debugPrint('Firebase UID: ${refreshedUser.uid}');
+
+      // ---------------------------------------------------------
+      // Continue with the existing brié security flow.
+      // ---------------------------------------------------------
+
       await _goAfterAuthentication();
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
+
+      debugPrint(
+        'Email/password login error: '
+        'code=${e.code}, message=${e.message}',
+      );
 
       String message;
 
@@ -156,8 +285,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       _showMessage(message);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+
+      debugPrint('Unexpected login error: $e');
 
       _showMessage('Something went wrong. Please try again.');
     } finally {
@@ -169,12 +300,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ------------------------------------------------------------
+  // =============================================================
   // GOOGLE SIGN-IN
-  // ------------------------------------------------------------
+  // =============================================================
 
   Future<void> _signInWithGoogle() async {
-    if (_isLoggingIn || _isGoogleSigningIn) return;
+    if (_isLoggingIn || _isGoogleSigningIn) {
+      return;
+    }
 
     FocusScope.of(context).unfocus();
 
@@ -183,15 +316,24 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
+      // ---------------------------------------------------------
       // Wait for the one-time initialization.
+      // ---------------------------------------------------------
+
       await _googleSignInInitialization;
 
       final googleSignIn = GoogleSignIn.instance;
 
+      // ---------------------------------------------------------
       // Show Google's account chooser.
+      // ---------------------------------------------------------
+
       final GoogleSignInAccount googleUser = await googleSignIn.authenticate();
 
-      // Get the Google authentication information.
+      // ---------------------------------------------------------
+      // Get Google's authentication information.
+      // ---------------------------------------------------------
+
       final GoogleSignInAuthentication googleAuth = googleUser.authentication;
 
       final idToken = googleAuth.idToken;
@@ -200,11 +342,49 @@ class _LoginScreenState extends State<LoginScreen> {
         throw StateError('Google sign-in did not return an ID token.');
       }
 
+      // ---------------------------------------------------------
       // Create a Firebase credential using Google's ID token.
+      // ---------------------------------------------------------
+
       final credential = GoogleAuthProvider.credential(idToken: idToken);
 
+      // ---------------------------------------------------------
       // Sign in to Firebase with the Google credential.
-      await FirebaseAuth.instance.signInWithCredential(credential);
+      // ---------------------------------------------------------
+
+      final userCredential = await _auth.signInWithCredential(credential);
+
+      // ---------------------------------------------------------
+      // Reload the Firebase user so that all account information
+      // is fresh before brié moves into its security flow.
+      // ---------------------------------------------------------
+
+      final signedInUser = userCredential.user;
+
+      if (signedInUser != null) {
+        await signedInUser.reload();
+      }
+
+      if (!mounted) return;
+
+      final refreshedUser = _auth.currentUser;
+
+      if (refreshedUser == null) {
+        _showMessage('Unable to load your Google account. Please try again.');
+        return;
+      }
+
+      debugPrint('Google login successful.');
+
+      debugPrint('Google account email: ${googleUser.email}');
+
+      debugPrint('Firebase Auth email: ${refreshedUser.email}');
+
+      debugPrint('Firebase UID: ${refreshedUser.uid}');
+
+      // ---------------------------------------------------------
+      // Continue through the same PIN/password security flow.
+      // ---------------------------------------------------------
 
       await _goAfterAuthentication();
     } on GoogleSignInException catch (e) {
@@ -215,8 +395,19 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         _showMessage('Unable to sign in with Google. Please try again.');
       }
+
+      debugPrint(
+        'Google sign-in error: '
+        'code=${e.code}, '
+        'description=${e.description}',
+      );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
+
+      debugPrint(
+        'Firebase Google sign-in error: '
+        'code=${e.code}, message=${e.message}',
+      );
 
       String message;
 
@@ -240,8 +431,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       _showMessage(message);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+
+      debugPrint('Unexpected Google sign-in error: $e');
 
       _showMessage('Unable to sign in with Google. Please try again.');
     } finally {
@@ -253,9 +446,9 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ------------------------------------------------------------
+  // =============================================================
   // FORGOT PASSWORD
-  // ------------------------------------------------------------
+  // =============================================================
 
   Future<void> _forgotPassword() async {
     final email = _emailController.text.trim();
@@ -270,13 +463,18 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      await _auth.sendPasswordResetEmail(email: email);
 
       if (!mounted) return;
 
       _showMessage('Password reset email sent. Check your inbox.');
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
+
+      debugPrint(
+        'Password reset error: '
+        'code=${e.code}, message=${e.message}',
+      );
 
       String message;
 
@@ -302,8 +500,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       _showMessage(message);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+
+      debugPrint('Unexpected password reset error: $e');
 
       _showMessage('Unable to send the reset email. Please try again.');
     } finally {
@@ -315,9 +515,9 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ------------------------------------------------------------
+  // =============================================================
   // MESSAGE
-  // ------------------------------------------------------------
+  // =============================================================
 
   void _showMessage(String message) {
     if (!mounted) return;
@@ -336,9 +536,9 @@ class _LoginScreenState extends State<LoginScreen> {
       );
   }
 
-  // ------------------------------------------------------------
+  // =============================================================
   // BUILD
-  // ------------------------------------------------------------
+  // =============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -353,9 +553,9 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --------------------------------------------------
+              // ---------------------------------------------------
               // BACK BUTTON
-              // --------------------------------------------------
+              // ---------------------------------------------------
 
               IconButton(
                 onPressed: isBusy
@@ -371,9 +571,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 15),
 
-              // --------------------------------------------------
+              // ---------------------------------------------------
               // BUTTERFLY
-              // --------------------------------------------------
+              // ---------------------------------------------------
               Center(
                 child: Image.asset(
                   'assets/images/butterfly.png',
@@ -385,9 +585,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 20),
 
-              // --------------------------------------------------
+              // ---------------------------------------------------
               // TITLE
-              // --------------------------------------------------
+              // ---------------------------------------------------
               const Center(
                 child: Text(
                   'Welcome back',
@@ -402,9 +602,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 10),
 
-              // --------------------------------------------------
+              // ---------------------------------------------------
               // SUBTITLE
-              // --------------------------------------------------
+              // ---------------------------------------------------
               const Center(
                 child: Text(
                   'Your little space is waiting for you.',
@@ -415,9 +615,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 40),
 
-              // --------------------------------------------------
+              // ---------------------------------------------------
               // EMAIL
-              // --------------------------------------------------
+              // ---------------------------------------------------
               const Text(
                 'Email',
                 style: TextStyle(
@@ -442,9 +642,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 20),
 
-              // --------------------------------------------------
+              // ---------------------------------------------------
               // PASSWORD
-              // --------------------------------------------------
+              // ---------------------------------------------------
               const Text(
                 'Password',
                 style: TextStyle(
@@ -485,9 +685,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 10),
 
-              // --------------------------------------------------
+              // ---------------------------------------------------
               // FORGOT PASSWORD
-              // --------------------------------------------------
+              // ---------------------------------------------------
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
@@ -516,9 +716,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 15),
 
-              // --------------------------------------------------
+              // ---------------------------------------------------
               // LOGIN BUTTON
-              // --------------------------------------------------
+              // ---------------------------------------------------
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -554,9 +754,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 25),
 
-              // --------------------------------------------------
+              // ---------------------------------------------------
               // DIVIDER
-              // --------------------------------------------------
+              // ---------------------------------------------------
               Row(
                 children: [
                   Expanded(child: Divider(color: Colors.grey.shade300)),
@@ -573,9 +773,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 20),
 
-              // --------------------------------------------------
+              // ---------------------------------------------------
               // GOOGLE BUTTON
-              // --------------------------------------------------
+              // ---------------------------------------------------
               SizedBox(
                 width: double.infinity,
                 height: 54,
@@ -622,9 +822,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 25),
 
-              // --------------------------------------------------
+              // ---------------------------------------------------
               // CREATE ACCOUNT
-              // --------------------------------------------------
+              // ---------------------------------------------------
               Center(
                 child: TextButton(
                   onPressed: isBusy
@@ -663,9 +863,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ------------------------------------------------------------
+  // =============================================================
   // INPUT DECORATION
-  // ------------------------------------------------------------
+  // =============================================================
 
   InputDecoration _inputDecoration({
     required String hintText,

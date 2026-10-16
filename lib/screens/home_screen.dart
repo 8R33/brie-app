@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/theme_controller.dart';
 import 'breathe_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -301,6 +302,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = BrieThemeController.instance.currentPalette;
+
     return PopScope(
       canPop: false,
 
@@ -327,11 +330,7 @@ class _HomeScreenState extends State<HomeScreen> {
       },
 
       child: Scaffold(
-        backgroundColor: const Color(0xFFFFF4F7),
-
-        // =========================================================
-        // HOME CONTENT
-        // =========================================================
+        backgroundColor: palette.background,
         body: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(22, 24, 22, 40),
@@ -340,141 +339,95 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
 
               children: [
-                // =================================================
-                // GREETING
-                // =================================================
-
                 Text(
                   _getGreeting(),
-
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 27,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF5A4050),
+                    color: palette.text,
                   ),
                 ),
 
                 const SizedBox(height: 8),
-
-                const Text(
+                Text(
                   'How are you feeling today?',
-
-                  style: TextStyle(fontSize: 16, color: Color(0xFF806873)),
+                  style: TextStyle(fontSize: 16, color: palette.muted),
                 ),
 
                 const SizedBox(height: 28),
 
-                // =================================================
-                // MOOD SELECTION
-                // =================================================
-                const Text(
+                Text(
                   'Choose what feels closest 💗',
-
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF5A4050),
+                    color: palette.text,
                   ),
                 ),
-
                 const SizedBox(height: 16),
 
                 SizedBox(
                   height: 126,
-
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
-
                     physics: const BouncingScrollPhysics(),
-
                     itemCount: _moods.length,
-
-                    separatorBuilder: (context, index) {
-                      return const SizedBox(width: 12);
-                    },
-
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(width: 12),
                     itemBuilder: (context, index) {
                       final mood = _moods[index];
-
                       final name = mood['name']!;
                       final emoji = mood['emoji']!;
-
                       final isSelected = _selectedMood == name;
 
                       return GestureDetector(
-                        onTap: () {
-                          _selectMood(name);
-                        },
-
+                        onTap: () => _selectMood(name),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 250),
-
                           curve: Curves.easeInOut,
-
                           width: 105,
-
                           padding: const EdgeInsets.symmetric(
                             horizontal: 10,
                             vertical: 14,
                           ),
-
                           decoration: BoxDecoration(
-                            color: isSelected
-                                ? const Color(0xFFFFE0EA)
-                                : Colors.white,
-
+                            color: isSelected ? palette.card : palette.surface,
                             borderRadius: BorderRadius.circular(22),
-
                             border: Border.all(
                               color: isSelected
-                                  ? const Color(0xFFC75D83)
-                                  : const Color(0xFFF0E3E8),
-
+                                  ? palette.accent
+                                  : palette.muted.withValues(alpha: 0.35),
                               width: isSelected ? 2 : 1,
                             ),
-
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.03),
-
                                 blurRadius: 8,
-
                                 offset: const Offset(0, 3),
                               ),
                             ],
                           ),
-
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
-
                             children: [
                               AnimatedScale(
                                 scale: isSelected ? 1.08 : 1.0,
-
                                 duration: const Duration(milliseconds: 250),
-
                                 child: Text(
                                   emoji,
-
                                   style: const TextStyle(fontSize: 34),
                                 ),
                               ),
-
                               const SizedBox(height: 9),
-
                               Text(
                                 name,
-
                                 textAlign: TextAlign.center,
-
                                 style: TextStyle(
                                   fontSize: 13,
-
                                   fontWeight: isSelected
                                       ? FontWeight.w600
                                       : FontWeight.w500,
-
-                                  color: const Color(0xFF5A4050),
+                                  color: palette.text,
                                 ),
                               ),
                             ],
@@ -487,60 +440,43 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 const SizedBox(height: 30),
 
-                // =================================================
-                // TODAY'S GENTLE MESSAGE
-                // =================================================
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 350),
-
                   switchInCurve: Curves.easeOut,
                   switchOutCurve: Curves.easeIn,
-
                   child: Container(
                     key: ValueKey(_selectedMood),
-
                     width: double.infinity,
-
                     padding: const EdgeInsets.all(22),
-
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFE8EF),
-
+                      color: palette.card,
                       borderRadius: BorderRadius.circular(24),
                     ),
-
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-
                       children: [
                         Row(
                           children: [
                             const Text('🌸', style: TextStyle(fontSize: 22)),
-
                             const SizedBox(width: 10),
-
-                            const Text(
+                            Text(
                               'Today’s gentle message',
-
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF8A5368),
+                                color: palette.accent,
                               ),
                             ),
                           ],
                         ),
-
                         const SizedBox(height: 15),
-
                         Text(
                           _getMoodMessage(),
-
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 20,
                             height: 1.45,
                             fontWeight: FontWeight.w500,
-                            color: Color(0xFF5A4050),
+                            color: palette.text,
                           ),
                         ),
                       ],
@@ -550,21 +486,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 const SizedBox(height: 30),
 
-                // =================================================
-                // SELECTED MOOD INDICATOR
-                // =================================================
                 Center(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 250),
-
                     child: Text(
                       'Feeling ${_selectedMood.toLowerCase()} today',
-
                       key: ValueKey(_selectedMood),
-
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
-                        color: Color(0xFF9A8991),
+                        color: palette.muted,
                         fontStyle: FontStyle.italic,
                       ),
                     ),
@@ -573,82 +503,59 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 const SizedBox(height: 28),
 
-                // =================================================
-                // TAKE A MOMENT / BREATHE
-                // =================================================
+                // Intentionally green: a calm space for breathing.
                 GestureDetector(
                   onTap: _openBreatheScreen,
-
                   child: Container(
                     width: double.infinity,
                     height: 190,
-
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(26),
-
                       gradient: const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-
                         colors: [Color(0xFFDCEFE5), Color(0xFFCFE5DC)],
                       ),
                     ),
-
                     child: Stack(
                       children: [
                         Positioned(
                           right: 18,
                           top: 18,
-
                           child: Icon(
                             Icons.spa_rounded,
-
                             size: 82,
-
                             color: Colors.white.withValues(alpha: 0.45),
                           ),
                         ),
-
                         Positioned(
                           right: 34,
                           bottom: 20,
-
                           child: Icon(
                             Icons.air_rounded,
-
                             size: 55,
-
                             color: Colors.white.withValues(alpha: 0.35),
                           ),
                         ),
-
                         Padding(
                           padding: const EdgeInsets.all(24),
-
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-
                             mainAxisAlignment: MainAxisAlignment.center,
-
                             children: [
                               const Text(
                                 '🌿 Take a moment',
-
                                 style: TextStyle(
                                   fontSize: 21,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFF385A45),
                                 ),
                               ),
-
                               const SizedBox(height: 10),
-
                               const SizedBox(
                                 width: 250,
-
                                 child: Text(
                                   'Pause, breathe, and give yourself a little space.',
-
                                   style: TextStyle(
                                     fontSize: 15,
                                     height: 1.45,
@@ -656,12 +563,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                               ),
-
                               const SizedBox(height: 14),
-
                               const Text(
                                 'Tap anywhere to begin',
-
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
@@ -678,52 +582,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 const SizedBox(height: 28),
 
-                // =================================================
-                // ENCOURAGEMENT
-                // =================================================
                 Container(
                   width: double.infinity,
-
                   padding: const EdgeInsets.all(22),
-
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF0D9),
-
+                    color: palette.card,
                     borderRadius: BorderRadius.circular(24),
                   ),
-
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
-
                     children: [
                       const Text('💗', style: TextStyle(fontSize: 28)),
-
                       const SizedBox(width: 14),
-
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-
                           children: [
-                            const Text(
+                            Text(
                               'A little encouragement',
-
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF76563D),
+                                color: palette.text,
                               ),
                             ),
-
                             const SizedBox(height: 8),
-
                             Text(
                               _encouragement,
-
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 15,
                                 height: 1.4,
-                                color: Color(0xFF80664F),
+                                color: palette.muted,
                               ),
                             ),
                           ],

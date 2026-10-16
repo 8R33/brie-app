@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/theme_controller.dart';
 import 'home_screen.dart';
 import 'create_screen.dart';
 import 'chat_screen.dart';
@@ -53,7 +54,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool showingSubsection = _activeSubsection != null;
+    final showingSubsection = _activeSubsection != null;
+    final palette = BrieThemeController.instance.currentPalette;
 
     return PopScope(
       canPop: false,
@@ -66,6 +68,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         }
       },
       child: Scaffold(
+        backgroundColor: palette.background,
         body: showingSubsection
             ? _activeSubsection!
             : IndexedStack(index: _currentIndex, children: _screens),
@@ -83,9 +86,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             : BottomNavigationBar(
                 currentIndex: _currentIndex,
                 type: BottomNavigationBarType.fixed,
-                backgroundColor: Colors.white,
-                selectedItemColor: const Color(0xFFC75D83),
-                unselectedItemColor: const Color(0xFF9C8A92),
+                backgroundColor: palette.surface,
+                selectedItemColor: palette.accent,
+                unselectedItemColor: palette.muted,
                 elevation: 8,
                 onTap: _onNavigationTap,
                 items: const [

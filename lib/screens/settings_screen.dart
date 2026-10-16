@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'account_settings_screen.dart';
+import 'notifications_screen.dart';
+import 'appearance_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -78,7 +80,11 @@ class SettingsScreen extends StatelessWidget {
               title: 'Notifications',
               subtitle: 'Choose what notifications you receive',
               onTap: () {
-                // Notifications screen will be added here.
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const NotificationsScreen(),
+                  ),
+                );
               },
             ),
 
@@ -93,7 +99,9 @@ class SettingsScreen extends StatelessWidget {
               title: 'Appearance',
               subtitle: 'Theme, colours and display preferences',
               onTap: () {
-                // Appearance screen will be added here.
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AppearanceScreen()),
+                );
               },
             ),
 
