@@ -49,3 +49,5 @@ app.*.map.json
 
 # Local Android SDK configuration
 local.properties
+
+/assets/audio/soft_wind.mp3

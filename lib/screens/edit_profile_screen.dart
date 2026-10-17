@@ -36,10 +36,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   XFile? _selectedImage;
   String? _currentPhotoPath;
 
-  static const Color _backgroundColor = Color(0xFFFFF4F7);
-  static const Color _primaryColor = Color(0xFFC75D83);
-  static const Color _textColor = Color(0xFF5A4050);
-  static const Color _mutedColor = Color(0xFF9C8A92);
+  // ============================================================
+  // GLOBAL THEME COLOURS
+  // ============================================================
+
+  Color get _primaryColor => Theme.of(context).colorScheme.primary;
+
+  Color get _backgroundColor => Theme.of(context).scaffoldBackgroundColor;
+
+  Color get _surfaceColor => Theme.of(context).colorScheme.surface;
+
+  Color get _textColor => Theme.of(context).colorScheme.onSurface;
+
+  Color get _mutedColor =>
+      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.60);
+
+  Color get _borderColor =>
+      Theme.of(context).colorScheme.outline.withValues(alpha: 0.30);
+
+  Color get _softPrimaryColor =>
+      Theme.of(context).colorScheme.primary.withValues(alpha: 0.10);
+
+  Color get _softBorderColor =>
+      Theme.of(context).colorScheme.outline.withValues(alpha: 0.15);
 
   @override
   void initState() {
@@ -69,9 +88,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final data = document.data();
 
       // NAME
-      final displayName = user.displayName?.trim() ?? '';
-
-      _nameController.text = displayName;
+      _nameController.text = user.displayName?.trim() ?? '';
 
       // USERNAME
       _usernameController.text = data?['username']?.toString().trim() ?? '';
@@ -79,7 +96,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       // BIO
       _bioController.text = data?['bio']?.toString() ?? '';
 
-      // PHONE
+      // PHONE: keep the Kenyan country code separate from the input.
       final savedPhone = data?['phoneNumber']?.toString().trim() ?? '';
 
       if (savedPhone.startsWith('+254') && savedPhone.length >= 13) {
@@ -102,11 +119,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (firestorePhotoPath.isNotEmpty) {
         final file = File(firestorePhotoPath);
 
-        if (await file.exists()) {
-          _currentPhotoPath = firestorePhotoPath;
-        } else {
-          _currentPhotoPath = null;
-        }
+        _currentPhotoPath = await file.exists() ? firestorePhotoPath : null;
       } else {
         _currentPhotoPath = null;
       }
@@ -135,7 +148,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   // ============================================================
-  // PICK + CROP PROFILE PICTURE
+  // PICK AND CROP PROFILE PICTURE
   // ============================================================
 
   Future<void> _pickProfilePicture() async {
@@ -154,9 +167,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         maxHeight: 2000,
       );
 
-      if (pickedImage == null) {
-        return;
-      }
+      if (pickedImage == null) return;
 
       // Make sure the selected file actually exists.
       final selectedFile = File(pickedImage.path);
@@ -187,10 +198,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ],
       );
 
-      // User pressed cancel.
-      if (croppedImage == null) {
-        return;
-      }
+      if (croppedImage == null) return;
 
       // Make sure cropped file exists.
       final croppedFile = File(croppedImage.path);
@@ -281,11 +289,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     final form = _formKey.currentState;
 
-    if (form == null) return;
-
-    if (!form.validate()) {
-      return;
-    }
+    if (form == null || !form.validate()) return;
 
     final user = _user;
 
@@ -473,9 +477,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         width: 100,
         height: 100,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) {
-          return _defaultProfileIcon();
-        },
+        errorBuilder: (_, __, ___) => _defaultProfileIcon(),
       );
     } else if (_currentPhotoPath != null && _currentPhotoPath!.isNotEmpty) {
       imageWidget = Image.file(
@@ -483,9 +485,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         width: 100,
         height: 100,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) {
-          return _defaultProfileIcon();
-        },
+        errorBuilder: (_, __, ___) => _defaultProfileIcon(),
       );
     } else {
       imageWidget = _defaultProfileIcon();
@@ -494,9 +494,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Container(
       width: 100,
       height: 100,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Color(0xFFFFE9EF),
+        color: _softPrimaryColor,
       ),
       child: ClipOval(
         child: SizedBox(width: 100, height: 100, child: imageWidget),
@@ -505,7 +505,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Widget _defaultProfileIcon() {
-    return const Center(
+    return Center(
       child: Icon(Icons.person_rounded, size: 48, color: _primaryColor),
     );
   }
@@ -530,7 +530,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: _textColor,
@@ -547,13 +547,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           textInputAction: maxLines > 1
               ? TextInputAction.newline
               : TextInputAction.next,
-          style: const TextStyle(color: _textColor, fontSize: 15),
+          style: TextStyle(color: _textColor, fontSize: 15),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: const TextStyle(color: _mutedColor),
+            hintStyle: TextStyle(color: _mutedColor),
             prefixIcon: Icon(icon, color: _primaryColor, size: 21),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: _surfaceColor,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 15,
@@ -564,11 +564,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(17),
-              borderSide: BorderSide.none,
+              borderSide: BorderSide(color: _softBorderColor),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(17),
-              borderSide: const BorderSide(color: _primaryColor, width: 1.2),
+              borderSide: BorderSide(color: _primaryColor, width: 1.4),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(17),
@@ -585,14 +585,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   // ============================================================
-  // PHONE FIELD
+  // KENYAN PHONE FIELD
   // ============================================================
 
   Widget _buildPhoneField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Phone number',
           style: TextStyle(
             fontSize: 14,
@@ -609,18 +609,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               children: [
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: _surfaceColor,
                     borderRadius: BorderRadius.circular(17),
                     border: Border.all(
                       color: field.hasError
                           ? Colors.redAccent
-                          : Colors.transparent,
+                          : _softBorderColor,
                     ),
                   ),
                   child: Row(
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.only(left: 16, right: 10),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 16, right: 10),
                         child: Icon(
                           Icons.phone_outlined,
                           color: _primaryColor,
@@ -628,17 +628,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                       ),
 
-                      // PERMANENT KENYAN CODE
+                      // PERMANENT KENYAN COUNTRY CODE
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 11,
                           vertical: 9,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFF0F4),
+                          color: _softPrimaryColor,
                           borderRadius: BorderRadius.circular(11),
                         ),
-                        child: const Text(
+                        child: Text(
                           '+254',
                           style: TextStyle(
                             color: _textColor,
@@ -661,19 +661,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ],
                           onChanged: (value) {
                             field.didChange(value);
-
                             setState(() {});
                           },
-                          style: const TextStyle(
-                            color: _textColor,
-                            fontSize: 15,
-                          ),
-                          decoration: const InputDecoration(
+                          style: TextStyle(color: _textColor, fontSize: 15),
+                          decoration: InputDecoration(
                             hintText: '111111111',
                             hintStyle: TextStyle(color: _mutedColor),
                             border: InputBorder.none,
                             counterText: '',
-                            contentPadding: EdgeInsets.symmetric(
+                            contentPadding: const EdgeInsets.symmetric(
                               horizontal: 0,
                               vertical: 15,
                             ),
@@ -725,9 +721,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
           clipBehavior: Clip.antiAlias,
           child: _isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: _primaryColor),
-                )
+              ? Center(child: CircularProgressIndicator(color: _primaryColor))
               : Column(
                   children: [
                     const SizedBox(height: 12),
@@ -737,7 +731,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       width: 42,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: Color(0xFFD8C7CE),
+                        color: _borderColor,
                         borderRadius: BorderRadius.circular(20),
                       ),
                     ),
@@ -749,7 +743,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       padding: const EdgeInsets.fromLTRB(22, 6, 14, 12),
                       child: Row(
                         children: [
-                          const Expanded(
+                          Expanded(
                             child: Text(
                               'Edit Profile',
                               style: TextStyle(
@@ -763,10 +757,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             tooltip: 'Close',
                             onPressed: _isSaving || _isPickingImage
                                 ? null
-                                : () {
-                                    Navigator.of(context).pop();
-                                  },
-                            icon: const Icon(
+                                : () => Navigator.of(context).pop(),
+                            icon: Icon(
                               Icons.close_rounded,
                               size: 29,
                               color: _textColor,
@@ -776,7 +768,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                     ),
 
-                    const Divider(height: 1, color: Color(0xFFEADDE2)),
+                    Divider(height: 1, color: _borderColor),
 
                     // FORM
                     Expanded(
@@ -813,7 +805,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                             child: Container(
                                               width: 42,
                                               height: 42,
-                                              decoration: const BoxDecoration(
+                                              decoration: BoxDecoration(
                                                 color: _primaryColor,
                                                 shape: BoxShape.circle,
                                               ),
@@ -845,7 +837,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                       onTap: _isPickingImage
                                           ? null
                                           : _pickProfilePicture,
-                                      child: const Text(
+                                      child: Text(
                                         'Change profile picture',
                                         style: TextStyle(
                                           color: _mutedColor,
@@ -905,7 +897,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                       : _saveProfile,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: _primaryColor,
-                                    foregroundColor: Colors.white,
+                                    foregroundColor: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimary,
                                     disabledBackgroundColor: _primaryColor
                                         .withValues(alpha: 0.55),
                                     elevation: 0,
@@ -918,12 +912,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     ),
                                   ),
                                   child: _isSaving
-                                      ? const SizedBox(
+                                      ? SizedBox(
                                           width: 19,
                                           height: 19,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
-                                            color: Colors.white,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onPrimary,
                                           ),
                                         )
                                       : const Text(

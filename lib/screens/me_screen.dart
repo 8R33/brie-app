@@ -60,13 +60,7 @@ class _MeScreenState extends State<MeScreen> {
 
   bool _menuOpen = false;
   bool _profileLoading = true;
-  bool _refreshing = false;
-
   int _selectedTab = 0;
-
-  // ===============================================================
-  // PROFILE DATA
-  // ===============================================================
 
   String _displayName = '';
   String _username = '';
@@ -74,6 +68,18 @@ class _MeScreenState extends State<MeScreen> {
 
   String? _photoUrl;
   String? _photoPath;
+
+  // Follow counts remain at zero until real follow functionality is added.
+  int _followersCount = 0;
+  int _followingCount = 0;
+  int _profileViews = 0;
+
+  ColorScheme get _colors => Theme.of(context).colorScheme;
+  Color get _primary => _colors.primary;
+  Color get _textColor => _colors.onSurface;
+  Color get _mutedColor => _colors.onSurfaceVariant;
+  Color get _surfaceColor => _colors.surface;
+  Color get _softSurfaceColor => _colors.surfaceContainerHighest;
 
   // ===============================================================
   // LOAD PROFILE
@@ -87,7 +93,6 @@ class _MeScreenState extends State<MeScreen> {
 
       setState(() {
         _profileLoading = false;
-        _refreshing = false;
         _displayName = '';
         _username = '';
         _bio = '';
@@ -99,44 +104,24 @@ class _MeScreenState extends State<MeScreen> {
     }
 
     if (showLoading && mounted) {
-      setState(() {
-        _profileLoading = true;
-      });
+      setState(() => _profileLoading = true);
     }
 
     try {
       await user.reload();
 
       final refreshedUser = _auth.currentUser;
-
       final document = await _firestore.collection('users').doc(user.uid).get();
-
       final data = document.data();
-
-      // =============================================================
-      // NAME
-      // =============================================================
-
-      String name = '';
+      final profileViews = (data?['profileViews'] as num?)?.toInt() ?? 0;
 
       final firestoreName =
           data?['name']?.toString().trim() ??
           data?['displayName']?.toString().trim() ??
           '';
 
-      if (firestoreName.isNotEmpty) {
-        name = firestoreName;
-      } else {
-        final authName = refreshedUser?.displayName?.trim() ?? '';
-
-        if (authName.isNotEmpty) {
-          name = authName;
-        }
-      }
-
-      // =============================================================
-      // USERNAME
-      // =============================================================
+      final authName = refreshedUser?.displayName?.trim() ?? '';
+      final name = firestoreName.isNotEmpty ? firestoreName : authName;
 
       String username = data?['username']?.toString().trim() ?? '';
 
@@ -144,31 +129,19 @@ class _MeScreenState extends State<MeScreen> {
         username = '@$username';
       }
 
-      // =============================================================
-      // BIO
-      // =============================================================
-
       final bio = data?['bio']?.toString().trim() ?? '';
 
-      // =============================================================
-      // LOCAL PROFILE PHOTO
-      // =============================================================
-
       String? localPhotoPath;
+      final storedPath = data?['photoPath']?.toString().trim() ?? '';
 
-      final firestorePhotoPath = data?['photoPath']?.toString().trim() ?? '';
-
-      if (firestorePhotoPath.isNotEmpty) {
-        final file = File(firestorePhotoPath);
-
-        if (await file.exists()) {
-          localPhotoPath = firestorePhotoPath;
+      // Only use a local file path if it is an actual local path.
+      if (storedPath.isNotEmpty &&
+          !storedPath.startsWith('http://') &&
+          !storedPath.startsWith('https://')) {
+        if (await File(storedPath).exists()) {
+          localPhotoPath = storedPath;
         }
       }
-
-      // =============================================================
-      // ONLINE PROFILE PHOTO
-      // =============================================================
 
       String? photoUrl = data?['photoUrl']?.toString().trim();
 
@@ -176,33 +149,23 @@ class _MeScreenState extends State<MeScreen> {
         photoUrl = refreshedUser?.photoURL;
       }
 
-      // =============================================================
-      // UPDATE SCREEN
-      // =============================================================
-
       if (!mounted) return;
 
       setState(() {
         _displayName = name;
         _username = username;
         _bio = bio;
-
         _photoPath = localPhotoPath;
-
         _photoUrl = photoUrl != null && photoUrl.isNotEmpty ? photoUrl : null;
-
         _profileLoading = false;
-        _refreshing = false;
+        _profileViews = profileViews;
       });
     } catch (e) {
       debugPrint('Error loading Me profile: $e');
 
       if (!mounted) return;
 
-      setState(() {
-        _profileLoading = false;
-        _refreshing = false;
-      });
+      setState(() => _profileLoading = false);
     }
   }
 
@@ -211,12 +174,6 @@ class _MeScreenState extends State<MeScreen> {
   // ===============================================================
 
   Future<void> _refreshProfile() async {
-    if (!mounted) return;
-
-    setState(() {
-      _refreshing = true;
-    });
-
     await _loadProfileData(showLoading: false);
   }
 
@@ -232,10 +189,6 @@ class _MeScreenState extends State<MeScreen> {
 
     if (!mounted) return;
 
-    // =============================================================
-    // IMMEDIATE UPDATE
-    // =============================================================
-
     if (result is Map) {
       final returnedName =
           result['name']?.toString().trim() ??
@@ -245,7 +198,6 @@ class _MeScreenState extends State<MeScreen> {
       String returnedUsername = result['username']?.toString().trim() ?? '';
 
       final returnedBio = result['bio']?.toString().trim() ?? '';
-
       final returnedPhotoPath = result['photoPath']?.toString().trim() ?? '';
 
       if (returnedUsername.isNotEmpty && !returnedUsername.startsWith('@')) {
@@ -269,16 +221,8 @@ class _MeScreenState extends State<MeScreen> {
       });
     }
 
-    // =============================================================
-    // RELOAD FROM FIREBASE
-    // =============================================================
-
     await _loadProfileData(showLoading: false);
   }
-
-  // ===============================================================
-  // OPEN SETTINGS
-  // ===============================================================
 
   Future<void> _openSettings() async {
     _closeMenu();
@@ -287,20 +231,12 @@ class _MeScreenState extends State<MeScreen> {
         .push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
   }
 
-  // ===============================================================
-  // OPEN SECURITY
-  // ===============================================================
-
   Future<void> _openSecurity() async {
     _closeMenu();
 
     await Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => const SecurityScreen()));
   }
-
-  // ===============================================================
-  // OPEN HELP & SUPPORT
-  // ===============================================================
 
   Future<void> _openHelpSupport() async {
     _closeMenu();
@@ -314,28 +250,12 @@ class _MeScreenState extends State<MeScreen> {
   // ===============================================================
 
   void _openMenu() {
-    setState(() {
-      _menuOpen = true;
-    });
+    setState(() => _menuOpen = true);
   }
 
   void _closeMenu() {
     if (!mounted) return;
-
-    setState(() {
-      _menuOpen = false;
-    });
-  }
-
-  void _showComingSoon(String title) {
-    _closeMenu();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$title will be added next 💗'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    setState(() => _menuOpen = false);
   }
 
   // ===============================================================
@@ -347,18 +267,15 @@ class _MeScreenState extends State<MeScreen> {
       return Container(
         width: 110,
         height: 110,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: Color(0xFFF3D9E2),
+          color: _softSurfaceColor,
         ),
-        child: const Center(
+        child: Center(
           child: SizedBox(
             width: 24,
             height: 24,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Color(0xFFC75D83),
-            ),
+            child: CircularProgressIndicator(strokeWidth: 2, color: _primary),
           ),
         ),
       );
@@ -371,11 +288,11 @@ class _MeScreenState extends State<MeScreen> {
         height: 110,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: const Color(0xFFF3D9E2),
-          border: Border.all(color: Colors.white, width: 3),
+          color: _softSurfaceColor,
+          border: Border.all(color: _surfaceColor, width: 3),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF5A4050).withValues(alpha: 0.10),
+              color: _textColor.withValues(alpha: 0.10),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -388,35 +305,21 @@ class _MeScreenState extends State<MeScreen> {
     );
   }
 
-  // ===============================================================
-  // PROFILE PHOTO CONTENT
-  // ===============================================================
-
   Widget _buildProfilePhotoContent({
     required double width,
     required double height,
   }) {
-    // =============================================================
-    // LOCAL PHOTO
-    // =============================================================
-
     if (_photoPath != null && _photoPath!.trim().isNotEmpty) {
-      final file = File(_photoPath!);
-
       return Image.file(
-        file,
+        File(_photoPath!),
         width: width,
         height: height,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
+        errorBuilder: (_, __, ___) {
           return _buildNetworkOrDefaultPhoto(width: width, height: height);
         },
       );
     }
-
-    // =============================================================
-    // ONLINE PHOTO
-    // =============================================================
 
     return _buildNetworkOrDefaultPhoto(width: width, height: height);
   }
@@ -431,9 +334,7 @@ class _MeScreenState extends State<MeScreen> {
         width: width,
         height: height,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return _defaultProfileIcon();
-        },
+        errorBuilder: (_, __, ___) => _defaultProfileIcon(),
       );
     }
 
@@ -441,20 +342,18 @@ class _MeScreenState extends State<MeScreen> {
   }
 
   Widget _defaultProfileIcon() {
-    return const Center(
-      child: Icon(Icons.person, size: 48, color: Color(0xFFC75D83)),
-    );
+    return Center(child: Icon(Icons.person, size: 48, color: _primary));
   }
 
   // ===============================================================
-  // VIEW PROFILE IMAGE
+  // ENLARGED PROFILE IMAGE
   // ===============================================================
 
   void _showProfileImage() {
     showDialog(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.55),
-      builder: (context) {
+      builder: (dialogContext) {
         return Dialog(
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -467,7 +366,7 @@ class _MeScreenState extends State<MeScreen> {
               width: 310,
               height: 310,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _surfaceColor,
                 borderRadius: BorderRadius.circular(22),
                 boxShadow: [
                   BoxShadow(
@@ -479,40 +378,22 @@ class _MeScreenState extends State<MeScreen> {
               ),
               child: Stack(
                 children: [
-                  // =================================================
-                  // LARGE IMAGE
-                  // =================================================
-
                   Positioned.fill(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(22),
                       child: _buildPopupImage(),
                     ),
                   ),
-
-                  // =================================================
-                  // CLOSE BUTTON
-                  // =================================================
                   Positioned(
                     top: 10,
                     right: 10,
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).pop();
-                      },
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.50),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.close,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                    child: IconButton.filled(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black.withValues(alpha: 0.50),
+                        foregroundColor: Colors.white,
                       ),
+                      icon: const Icon(Icons.close),
                     ),
                   ),
                 ],
@@ -524,32 +405,16 @@ class _MeScreenState extends State<MeScreen> {
     );
   }
 
-  // ===============================================================
-  // POPUP IMAGE
-  // ===============================================================
-
   Widget _buildPopupImage() {
-    // =============================================================
-    // LOCAL IMAGE
-    // =============================================================
-
     if (_photoPath != null && _photoPath!.trim().isNotEmpty) {
-      final file = File(_photoPath!);
-
       return Image.file(
-        file,
+        File(_photoPath!),
         width: 310,
         height: 310,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return _buildPopupNetworkOrDefault();
-        },
+        errorBuilder: (_, __, ___) => _buildPopupNetworkOrDefault(),
       );
     }
-
-    // =============================================================
-    // NETWORK IMAGE
-    // =============================================================
 
     return _buildPopupNetworkOrDefault();
   }
@@ -561,9 +426,7 @@ class _MeScreenState extends State<MeScreen> {
         width: 310,
         height: 310,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return _buildPopupDefault();
-        },
+        errorBuilder: (_, __, ___) => _buildPopupDefault(),
       );
     }
 
@@ -572,98 +435,193 @@ class _MeScreenState extends State<MeScreen> {
 
   Widget _buildPopupDefault() {
     return Container(
-      color: const Color(0xFFF3D9E2),
-      child: const Center(
-        child: Icon(Icons.person, size: 100, color: Color(0xFFC75D83)),
-      ),
+      color: _softSurfaceColor,
+      child: Center(child: Icon(Icons.person, size: 100, color: _primary)),
     );
   }
 
   // ===============================================================
-  // FOLLOWERS / FOLLOWING
+  // PROFILE HEADER
+  // Picture on the left, text on the right.
   // ===============================================================
 
-  Widget _buildFollowStats() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '0 Followers',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF5A4050),
-            ),
-          ),
-          SizedBox(width: 20),
-          Text(
-            '0 Following',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF5A4050),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ===============================================================
-  // TABS
-  // ===============================================================
-
-  Widget _buildTabs() {
+  Widget _buildProfileHeader() {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _buildProfileImage(),
+        const SizedBox(width: 16),
         Expanded(
-          child: GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedTab = 0;
-              });
-            },
-            child: _buildTab(title: 'Mine', selected: _selectedTab == 0),
-          ),
-        ),
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedTab = 1;
-              });
-            },
-            child: _buildTab(title: 'Saved', selected: _selectedTab == 1),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: _buildProfileText(),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildTab({required String title, required bool selected}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 13),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: selected ? const Color(0xFFC75D83) : const Color(0xFFEADDE2),
-            width: selected ? 2 : 1,
+  Widget _buildProfileText() {
+    if (_profileLoading) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _skeletonLine(width: 135, height: 22),
+          const SizedBox(height: 9),
+          _skeletonLine(width: 85, height: 14),
+          const SizedBox(height: 12),
+          _skeletonLine(width: 155, height: 13),
+          const SizedBox(height: 6),
+          _skeletonLine(width: 115, height: 13),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _displayName.isNotEmpty ? _displayName : 'Your name',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: _textColor,
           ),
         ),
+        if (_username.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            _username,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 14, color: _mutedColor),
+          ),
+        ],
+        if (_bio.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            _bio,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, height: 1.4, color: _textColor),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _skeletonLine({required double width, required double height}) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: _softSurfaceColor,
+        borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(
-        title,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-          color: selected ? const Color(0xFFC75D83) : const Color(0xFF9C8A92),
+    );
+  }
+
+  // ===============================================================
+  // ===============================================================
+  // FOLLOWERS / FOLLOWING
+  // Slim, centred statistic containers.
+  // ===============================================================
+
+  Widget _buildFollowStats() {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      children: [
+        _buildStatText(_followersCount, 'Followers'),
+        Text('·', style: TextStyle(color: _mutedColor)),
+        _buildStatText(_followingCount, 'Following'),
+        Text('·', style: TextStyle(color: _mutedColor)),
+        _buildStatText(_profileViews, 'Views'),
+      ],
+    );
+  }
+
+  Widget _buildStatText(int count, String label) {
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: '$count ',
+            style: TextStyle(color: _textColor, fontWeight: FontWeight.w500),
+          ),
+          TextSpan(
+            text: label,
+            style: TextStyle(color: _mutedColor),
+          ),
+        ],
+      ),
+      style: const TextStyle(fontSize: 13),
+    );
+  }
+
+  // ===============================================================
+  // MINE / SHARED TABS
+  // ===============================================================
+
+  Widget _buildTabs() {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildTab(
+            title: 'Mine',
+            icon: Icons.person_outline_rounded,
+            selected: _selectedTab == 0,
+            onTap: () => setState(() => _selectedTab = 0),
+          ),
+        ),
+        Expanded(
+          child: _buildTab(
+            title: 'Shared',
+            icon: Icons.share_outlined,
+            selected: _selectedTab == 1,
+            onTap: () => setState(() => _selectedTab = 1),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTab({
+    required String title,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: selected ? _primary : _softSurfaceColor,
+              width: selected ? 2.5 : 1,
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18, color: selected ? _primary : _mutedColor),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                color: selected ? _primary : _mutedColor,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -678,7 +636,7 @@ class _MeScreenState extends State<MeScreen> {
       return _buildMineContent();
     }
 
-    return _buildSavedContent();
+    return _buildSharedContent();
   }
 
   Widget _buildMineContent() {
@@ -690,37 +648,33 @@ class _MeScreenState extends State<MeScreen> {
             width: 62,
             height: 62,
             decoration: BoxDecoration(
-              color: const Color(0xFFF3D9E2),
+              color: _softSurfaceColor,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(
-              Icons.auto_awesome_outlined,
-              color: Color(0xFFC75D83),
-              size: 30,
-            ),
+            child: Icon(Icons.auto_awesome_outlined, color: _primary, size: 30),
           ),
           const SizedBox(height: 14),
-          const Text(
+          Text(
             'Your creations will appear here',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF5A4050),
+              color: _textColor,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Create something beautiful and it will show up here.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Color(0xFF9C8A92)),
+            style: TextStyle(fontSize: 12, color: _mutedColor),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSavedContent() {
+  Widget _buildSharedContent() {
     return Padding(
       padding: const EdgeInsets.only(top: 35),
       child: Column(
@@ -729,30 +683,26 @@ class _MeScreenState extends State<MeScreen> {
             width: 62,
             height: 62,
             decoration: BoxDecoration(
-              color: const Color(0xFFF3D9E2),
+              color: _softSurfaceColor,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(
-              Icons.bookmark_border,
-              color: Color(0xFFC75D83),
-              size: 30,
-            ),
+            child: Icon(Icons.share_outlined, color: _primary, size: 30),
           ),
           const SizedBox(height: 14),
-          const Text(
-            'Nothing saved yet',
+          Text(
+            'Nothing shared yet',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF5A4050),
+              color: _textColor,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Content you save will appear here.',
+          Text(
+            'Content you share will appear here.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Color(0xFF9C8A92)),
+            style: TextStyle(fontSize: 12, color: _mutedColor),
           ),
         ],
       ),
@@ -765,21 +715,14 @@ class _MeScreenState extends State<MeScreen> {
 
   Widget _buildSideMenu() {
     final screenWidth = MediaQuery.sizeOf(context).width;
-
     final screenHeight = MediaQuery.sizeOf(context).height;
-
     final topPadding = MediaQuery.paddingOf(context).top;
 
     final panelWidth = (screenWidth * 0.50).clamp(220.0, 360.0);
-
     final panelHeight = screenHeight * 0.50;
 
     return Stack(
       children: [
-        // =========================================================
-        // OVERLAY
-        // =========================================================
-
         if (_menuOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -787,10 +730,6 @@ class _MeScreenState extends State<MeScreen> {
               child: Container(color: Colors.black.withValues(alpha: 0.18)),
             ),
           ),
-
-        // =========================================================
-        // MENU PANEL
-        // =========================================================
         AnimatedPositioned(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
@@ -800,7 +739,7 @@ class _MeScreenState extends State<MeScreen> {
           height: panelHeight,
           child: Material(
             elevation: 10,
-            color: Colors.white,
+            color: _surfaceColor,
             borderRadius: const BorderRadius.only(
               bottomRight: Radius.circular(24),
             ),
@@ -811,52 +750,32 @@ class _MeScreenState extends State<MeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // =================================================
-                  // MENU TITLE
-                  // =================================================
-
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(22, 24, 16, 18),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 24, 16, 18),
                     child: Text(
                       'Menu',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF5A4050),
+                        color: _textColor,
                       ),
                     ),
                   ),
-
-                  // =================================================
-                  // PROFILE
-                  // =================================================
                   _buildMenuItem(
                     icon: Icons.person_outline,
                     title: 'Profile',
                     onTap: _openProfile,
                   ),
-
-                  // =================================================
-                  // SETTINGS
-                  // =================================================
                   _buildMenuItem(
                     icon: Icons.settings_outlined,
                     title: 'Settings',
                     onTap: _openSettings,
                   ),
-
-                  // =================================================
-                  // SECURITY
-                  // =================================================
                   _buildMenuItem(
                     icon: Icons.lock_outline,
                     title: 'Security',
                     onTap: _openSecurity,
                   ),
-
-                  // =================================================
-                  // HELP & SUPPORT
-                  // =================================================
                   _buildMenuItem(
                     icon: Icons.help_outline,
                     title: 'Help & Support',
@@ -870,10 +789,6 @@ class _MeScreenState extends State<MeScreen> {
       ],
     );
   }
-
-  // ===============================================================
-  // MENU ITEM
-  // ===============================================================
 
   Widget _buildMenuItem({
     required IconData icon,
@@ -890,111 +805,26 @@ class _MeScreenState extends State<MeScreen> {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFE9EF),
+                color: _softSurfaceColor,
                 borderRadius: BorderRadius.circular(13),
               ),
-              child: Icon(icon, size: 22, color: const Color(0xFFC75D83)),
+              child: Icon(icon, size: 22, color: _primary),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF5A4050),
+                  color: _textColor,
                 ),
               ),
             ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 23,
-              color: Color(0xFF9C8A92),
-            ),
+            Icon(Icons.chevron_right_rounded, size: 23, color: _mutedColor),
           ],
         ),
       ),
-    );
-  }
-
-  // ===============================================================
-  // PROFILE TEXT
-  // ===============================================================
-
-  Widget _buildProfileText() {
-    if (_profileLoading) {
-      return Column(
-        children: [
-          const SizedBox(height: 2),
-
-          Container(
-            width: 130,
-            height: 24,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3D9E2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          Container(
-            width: 80,
-            height: 15,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3D9E2),
-              borderRadius: BorderRadius.circular(6),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          Container(
-            width: 170,
-            height: 15,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3D9E2),
-              borderRadius: BorderRadius.circular(6),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Column(
-      children: [
-        if (_displayName.isNotEmpty)
-          Text(
-            _displayName,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 23,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF5A4050),
-            ),
-          ),
-
-        if (_displayName.isNotEmpty && _username.isNotEmpty)
-          const SizedBox(height: 4),
-
-        if (_username.isNotEmpty)
-          Text(
-            _username,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 13, color: Color(0xFF9C8A92)),
-          ),
-
-        if (_bio.isNotEmpty) const SizedBox(height: 8),
-
-        if (_bio.isNotEmpty)
-          Text(
-            _bio,
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13, color: Color(0xFF7C6A72)),
-          ),
-      ],
     );
   }
 
@@ -1005,29 +835,21 @@ class _MeScreenState extends State<MeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF4F7),
-
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
           SafeArea(
             child: RefreshIndicator(
-              color: const Color(0xFFC75D83),
-              backgroundColor: Colors.white,
+              color: _primary,
+              backgroundColor: _surfaceColor,
               onRefresh: _refreshProfile,
-
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 35),
-
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
-
                   children: [
-                    // =================================================
                     // MENU BUTTON
-                    // =================================================
-
                     Align(
                       alignment: Alignment.centerLeft,
                       child: IconButton(
@@ -1037,47 +859,26 @@ class _MeScreenState extends State<MeScreen> {
                           minWidth: 44,
                           minHeight: 44,
                         ),
-                        icon: const Icon(
-                          Icons.menu,
-                          color: Color(0xFF5A4050),
-                          size: 27,
-                        ),
+                        icon: Icon(Icons.menu, color: _textColor, size: 27),
                       ),
                     ),
 
-                    // Reduced from 10px.
-                    // This moves the profile picture upward.
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 10),
 
-                    // =================================================
-                    // PROFILE PHOTO
-                    // =================================================
-                    _buildProfileImage(),
+                    // PROFILE HEADER
+                    _buildProfileHeader(),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 22),
 
-                    // =================================================
-                    // PROFILE TEXT
-                    // =================================================
-                    _buildProfileText(),
-
-                    const SizedBox(height: 16),
-
-                    // =================================================
-                    // FOLLOW STATS
-                    // =================================================
+                    // CENTRED FOLLOWER STATISTICS
                     _buildFollowStats(),
 
-                    const SizedBox(height: 25),
+                    const SizedBox(height: 26),
 
-                    // =================================================
-                    // TABS
-                    // =================================================
+                    // MINE / SHARED
                     _buildTabs(),
 
-                    // =================================================
-                    // TAB CONTENT
-                    // =================================================
+                    // SELECTED TAB CONTENT
                     _buildTabContent(),
 
                     const SizedBox(height: 20),
@@ -1087,23 +888,16 @@ class _MeScreenState extends State<MeScreen> {
             ),
           ),
 
-          // =========================================================
           // SIDE MENU
-          // =========================================================
           _buildSideMenu(),
         ],
       ),
     );
   }
 
-  // ===============================================================
-  // INIT
-  // ===============================================================
-
   @override
   void initState() {
     super.initState();
-
     _loadProfileData();
   }
 }

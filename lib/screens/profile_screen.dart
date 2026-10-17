@@ -14,27 +14,41 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  static final Map<String, String> _localPhotoCache = {};
-
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   bool _isLoading = true;
+  bool _isEditing = false;
 
-  String _displayName = '';
-  String _username = '';
+  String _name = 'Your name';
+  String _username = '@username';
   String _bio = '';
-  String? _photoUrl;
-  String? _photoPath;
-
   String _email = '';
   String _phoneNumber = '';
+  String? _photoPath;
+  String? _photoUrl;
 
-  User? get _user => _auth.currentUser;
+  // ============================================================
+  // THEME COLORS
+  // ============================================================
 
-  // ===============================================================
-  // INIT
-  // ===============================================================
+  Color get _primaryColor => Theme.of(context).colorScheme.primary;
+
+  Color get _backgroundColor => Theme.of(context).scaffoldBackgroundColor;
+
+  Color get _surfaceColor => Theme.of(context).colorScheme.surface;
+
+  Color get _textColor => Theme.of(context).colorScheme.onSurface;
+
+  Color get _mutedColor =>
+      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.60);
+
+  Color get _borderColor =>
+      Theme.of(context).colorScheme.outline.withValues(alpha: 0.25);
+
+  Color get _softPrimaryColor =>
+      Theme.of(context).colorScheme.primary.withValues(alpha: 0.10);
+
+  // ============================================================
+  // INITIALIZATION
+  // ============================================================
 
   @override
   void initState() {
@@ -42,416 +56,256 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadProfile();
   }
 
-  // ===============================================================
-  // LOAD PROFILE
-  // ===============================================================
+  // ============================================================
+  // LOAD PROFILE FROM FIREBASE
+  // ============================================================
 
   Future<void> _loadProfile() async {
-    final user = _user;
-
-    if (user == null) {
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-        _displayName = '';
-        _username = '';
-        _bio = '';
-        _email = '';
-        _phoneNumber = '';
-        _photoUrl = null;
-        _photoPath = null;
-      });
-
-      return;
+    if (mounted) {
+      setState(() => _isLoading = true);
     }
 
     try {
-      // -----------------------------------------------------------
-      // Refresh Firebase Authentication
-      // -----------------------------------------------------------
+      final user = FirebaseAuth.instance.currentUser;
 
-      await user.reload();
+      if (user == null) {
+        if (!mounted) return;
 
-      final refreshedUser = _auth.currentUser;
-
-      // -----------------------------------------------------------
-      // Get Firestore profile
-      // -----------------------------------------------------------
-
-      final document = await _firestore.collection('users').doc(user.uid).get();
-
-      final data = document.data();
-
-      // -----------------------------------------------------------
-      // NAME
-      // -----------------------------------------------------------
-
-      String displayName =
-          data?['name']?.toString().trim() ??
-          data?['displayName']?.toString().trim() ??
-          '';
-
-      if (displayName.isEmpty) {
-        displayName = refreshedUser?.displayName?.trim() ?? '';
-      }
-
-      // -----------------------------------------------------------
-      // USERNAME
-      // -----------------------------------------------------------
-
-      String username = data?['username']?.toString().trim() ?? '';
-
-      if (username.isNotEmpty && !username.startsWith('@')) {
-        username = '@$username';
-      }
-
-      // -----------------------------------------------------------
-      // BIO
-      // -----------------------------------------------------------
-
-      final bio = data?['bio']?.toString().trim() ?? '';
-
-      // -----------------------------------------------------------
-      // PHONE NUMBER
-      // -----------------------------------------------------------
-
-      final phoneNumber = data?['phoneNumber']?.toString().trim() ?? '';
-
-      // -----------------------------------------------------------
-      // EMAIL
-      // -----------------------------------------------------------
-
-      final email = refreshedUser?.email?.trim() ?? '';
-
-      // -----------------------------------------------------------
-      // LOCAL PROFILE PHOTO
-      // -----------------------------------------------------------
-
-      String? localPhotoPath;
-
-      final savedLocalPath = _localPhotoCache[user.uid];
-
-      if (savedLocalPath != null && savedLocalPath.trim().isNotEmpty) {
-        final file = File(savedLocalPath);
-
-        if (await file.exists()) {
-          localPhotoPath = savedLocalPath;
-        }
-      }
-
-      // -----------------------------------------------------------
-      // CHECK FIRESTORE PHOTO PATH
-      // -----------------------------------------------------------
-
-      if (localPhotoPath == null) {
-        final firestorePhotoPath = data?['photoPath']?.toString().trim() ?? '';
-
-        if (firestorePhotoPath.isNotEmpty) {
-          final file = File(firestorePhotoPath);
-
-          if (await file.exists()) {
-            localPhotoPath = firestorePhotoPath;
-          }
-        }
-      }
-
-      // -----------------------------------------------------------
-      // ONLINE PHOTO
-      // -----------------------------------------------------------
-
-      String? photoUrl = data?['photoUrl']?.toString().trim();
-
-      if (photoUrl == null || photoUrl.isEmpty) {
-        photoUrl = refreshedUser?.photoURL;
-      }
-
-      // -----------------------------------------------------------
-      // UPDATE SCREEN
-      // -----------------------------------------------------------
-
-      if (!mounted) return;
-
-      setState(() {
-        _displayName = displayName;
-        _username = username;
-        _bio = bio;
-        _phoneNumber = phoneNumber;
-        _email = email;
-
-        _photoPath = localPhotoPath;
-
-        _photoUrl = photoUrl != null && photoUrl.isNotEmpty ? photoUrl : null;
-
-        _isLoading = false;
-      });
-    } catch (e) {
-      debugPrint('Error loading profile: $e');
-
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  // ===============================================================
-  // OPEN EDIT PROFILE
-  // ===============================================================
-
-  Future<void> _openEditProfile() async {
-    final result = await showModalBottomSheet<dynamic>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.35),
-      enableDrag: true,
-      isDismissible: true,
-      builder: (context) {
-        return const EditProfileScreen();
-      },
-    );
-
-    if (!mounted) return;
-
-    // =============================================================
-    // IMMEDIATE PROFILE UPDATE
-    // =============================================================
-
-    if (result is Map) {
-      final returnedName =
-          result['name']?.toString().trim() ??
-          result['displayName']?.toString().trim() ??
-          '';
-
-      String returnedUsername = result['username']?.toString().trim() ?? '';
-
-      final returnedBio = result['bio']?.toString().trim() ?? '';
-
-      final returnedPhone = result['phoneNumber']?.toString().trim() ?? '';
-
-      final returnedPhotoPath = result['photoPath']?.toString().trim() ?? '';
-
-      final returnedPhotoUrl = result['photoUrl']?.toString().trim() ?? '';
-
-      if (returnedUsername.isNotEmpty && !returnedUsername.startsWith('@')) {
-        returnedUsername = '@$returnedUsername';
-      }
-
-      setState(() {
-        if (returnedName.isNotEmpty) {
-          _displayName = returnedName;
-        }
-
-        if (returnedUsername.isNotEmpty) {
-          _username = returnedUsername;
-        }
-
-        _bio = returnedBio;
-
-        if (returnedPhone.isNotEmpty) {
-          _phoneNumber = returnedPhone;
-        }
-
-        // ---------------------------------------------------------
-        // MOST IMPORTANT PART:
-        // Immediately replace the profile picture.
-        // ---------------------------------------------------------
-
-        if (returnedPhotoPath.isNotEmpty) {
-          final currentUserId = _user?.uid;
-          if (currentUserId != null) {
-            _localPhotoCache[currentUserId] = returnedPhotoPath;
-          }
-
-          _photoPath = returnedPhotoPath;
-          _photoUrl = null;
-        }
-
-        if (returnedPhotoUrl.isNotEmpty) {
-          final currentUserId = _user?.uid;
-          if (currentUserId != null) {
-            _localPhotoCache.remove(currentUserId);
-          }
-
-          _photoUrl = returnedPhotoUrl;
+        setState(() {
+          _name = 'Guest';
+          _username = '@guest';
+          _bio = '';
+          _email = '';
+          _phoneNumber = '';
           _photoPath = null;
-        }
+          _photoUrl = null;
+          _isLoading = false;
+        });
+
+        return;
+      }
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final data = doc.data() ?? <String, dynamic>{};
+
+      final name =
+          (data['displayName'] ?? data['name'] ?? user.displayName ?? '')
+              .toString()
+              .trim();
+
+      final username = (data['username'] ?? '').toString().trim();
+
+      final photoPath = (data['photoPath'] ?? '').toString().trim();
+
+      final photoUrl = (data['photoUrl'] ?? user.photoURL ?? '')
+          .toString()
+          .trim();
+
+      if (!mounted) return;
+
+      setState(() {
+        _name = name.isEmpty ? 'Your name' : name;
+
+        _username = username.isEmpty
+            ? '@username'
+            : username.startsWith('@')
+            ? username
+            : '@$username';
+
+        _bio = (data['bio'] ?? '').toString().trim();
+
+        _email = (data['email'] ?? user.email ?? '').toString().trim();
+
+        _phoneNumber = (data['phoneNumber'] ?? '').toString().trim();
+
+        _photoPath = photoPath.isEmpty ? null : photoPath;
+
+        _photoUrl = photoUrl.isEmpty ? null : photoUrl;
+
+        _isLoading = false;
       });
+    } catch (e, stackTrace) {
+      debugPrint('ProfileScreen loading error: $e');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showMessage('Could not load your profile.');
+      }
     }
-
-    // =============================================================
-    // LOAD AGAIN FROM FIREBASE / LOCAL STORAGE
-    // =============================================================
-
-    await _loadProfile();
   }
 
-  // ===============================================================
+  // ============================================================
   // PROFILE IMAGE
-  // ===============================================================
+  // ============================================================
 
-  Widget _buildProfileImage() {
+  ImageProvider<Object>? _getProfileImage() {
+    final path = _photoPath;
+
+    if (path != null && path.isNotEmpty) {
+      if (path.startsWith('https://') || path.startsWith('http://')) {
+        return NetworkImage(path);
+      }
+
+      final file = File(path);
+
+      if (file.existsSync()) {
+        return FileImage(file);
+      }
+    }
+
+    final url = _photoUrl;
+
+    if (url != null && url.isNotEmpty) {
+      return NetworkImage(url);
+    }
+
+    return null;
+  }
+
+  Widget _buildAvatar() {
+    final image = _getProfileImage();
+
     return Container(
-      width: 130,
-      height: 130,
+      width: 132,
+      height: 132,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: const Color(0xFFF3D9E2),
-        border: Border.all(color: Colors.white, width: 4),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF5A4050).withValues(alpha: 0.10),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        color: _softPrimaryColor,
+        border: Border.all(
+          color: _primaryColor.withValues(alpha: 0.25),
+          width: 3,
+        ),
       ),
-      child: ClipOval(child: _buildProfilePhotoContent()),
-    );
-  }
-
-  // ===============================================================
-  // PROFILE PHOTO CONTENT
-  // ===============================================================
-
-  Widget _buildProfilePhotoContent() {
-    // -------------------------------------------------------------
-    // LOCAL PHOTO
-    // -------------------------------------------------------------
-
-    if (_photoPath != null && _photoPath!.trim().isNotEmpty) {
-      final file = File(_photoPath!);
-
-      return Image.file(
-        file,
-        width: 130,
-        height: 130,
-        fit: BoxFit.cover,
-        key: ValueKey(_photoPath),
-        errorBuilder: (context, error, stackTrace) {
-          return _buildNetworkOrDefaultPhoto();
-        },
-      );
-    }
-
-    // -------------------------------------------------------------
-    // NETWORK PHOTO
-    // -------------------------------------------------------------
-
-    return _buildNetworkOrDefaultPhoto();
-  }
-
-  Widget _buildNetworkOrDefaultPhoto() {
-    if (_photoUrl != null && _photoUrl!.trim().isNotEmpty) {
-      return Image.network(
-        _photoUrl!,
-        width: 130,
-        height: 130,
-        fit: BoxFit.cover,
-        key: ValueKey(_photoUrl),
-        errorBuilder: (context, error, stackTrace) {
-          return _defaultProfileIcon();
-        },
-      );
-    }
-
-    return _defaultProfileIcon();
-  }
-
-  Widget _defaultProfileIcon() {
-    return const Center(
-      child: Icon(Icons.person, size: 62, color: Color(0xFFC75D83)),
-    );
-  }
-
-  // ===============================================================
-  // EDIT BUTTON
-  // ===============================================================
-
-  Widget _buildEditButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: _openEditProfile,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFC75D83),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-          ),
-        ),
-        child: const Text(
-          'Edit Profile',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-        ),
+      padding: const EdgeInsets.all(4),
+      child: ClipOval(
+        child: image == null
+            ? Icon(Icons.person_rounded, size: 68, color: _primaryColor)
+            : Image(
+                image: image,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    Icons.person_rounded,
+                    size: 68,
+                    color: _primaryColor,
+                  );
+                },
+              ),
       ),
     );
   }
 
-  // ===============================================================
-  // INFORMATION ROW
-  // ===============================================================
+  // ============================================================
+  // EDIT PROFILE
+  // ============================================================
 
-  Widget _buildInfoRow({
+  Future<void> _editProfile() async {
+    if (_isEditing) return;
+
+    setState(() => _isEditing = true);
+
+    try {
+      final result = await showModalBottomSheet<dynamic>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => const EditProfileScreen(),
+      );
+
+      if (!mounted) return;
+
+      if (result is Map && result['saved'] == true) {
+        await _loadProfile();
+
+        if (!mounted) return;
+
+        _showMessage('Profile updated successfully.');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Opening EditProfileScreen failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (mounted) {
+        _showMessage('Could not open profile editing.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isEditing = false);
+      }
+    }
+  }
+
+  // ============================================================
+  // SNACKBAR MESSAGE
+  // ============================================================
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
+  }
+
+  // ============================================================
+  // PERSONAL INFORMATION CARD
+  // ============================================================
+
+  Widget _buildInfoCard({
     required IconData icon,
-    required String title,
+    required String label,
     required String value,
   }) {
-    final displayValue = value.trim().isEmpty ? 'Not added' : value;
+    final displayValue = value.trim().isEmpty ? 'Not added yet' : value;
 
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _borderColor),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 38,
-            height: 38,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF4F7),
-              borderRadius: BorderRadius.circular(11),
+              color: _softPrimaryColor,
+              borderRadius: BorderRadius.circular(13),
             ),
-            child: Icon(icon, size: 20, color: const Color(0xFFC75D83)),
+            child: Icon(icon, color: _primaryColor, size: 21),
           ),
-
-          const SizedBox(width: 12),
-
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF9C8A92),
+                  label,
+                  style: TextStyle(
+                    color: _mutedColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-
-                const SizedBox(height: 3),
-
+                const SizedBox(height: 5),
                 Text(
                   displayValue,
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: displayValue == 'Not added'
-                        ? const Color(0xFFB19FA7)
-                        : const Color(0xFF5A4050),
-                    fontStyle: displayValue == 'Not added'
-                        ? FontStyle.italic
-                        : FontStyle.normal,
+                    color: value.trim().isEmpty ? _mutedColor : _textColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -462,136 +316,131 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ===============================================================
-  // PROFILE INFORMATION SECTION
-  // ===============================================================
+  // ============================================================
+  // PROFILE CONTENT
+  //
+  // Layout:
+  // 1. Profile picture
+  // 2. Edit Profile button
+  // 3. Personal information
+  // ============================================================
 
-  Widget _buildProfileInformation() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Profile Information',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF5A4050),
+  Widget _buildProfileContent() {
+    return RefreshIndicator(
+      color: _primaryColor,
+      onRefresh: _loadProfile,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
+        children: [
+          // PROFILE PICTURE
+          Center(child: _buildAvatar()),
+
+          const SizedBox(height: 16),
+
+          // EDIT PROFILE BUTTON DIRECTLY BELOW THE PICTURE
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isEditing ? null : _editProfile,
+              icon: _isEditing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.edit_outlined, size: 19),
+              label: Text(_isEditing ? 'Opening editor...' : 'Edit Profile'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryColor,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                disabledBackgroundColor: _primaryColor.withValues(alpha: 0.5),
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
           ),
-        ),
 
-        const SizedBox(height: 12),
+          const SizedBox(height: 28),
 
-        // NAME
-        _buildInfoRow(
-          icon: Icons.person_outline,
-          title: 'Name',
-          value: _displayName,
-        ),
+          // PERSONAL INFORMATION HEADING
+          Text(
+            'Personal information',
+            style: TextStyle(
+              color: _textColor,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
 
-        const SizedBox(height: 10),
+          const SizedBox(height: 14),
 
-        // USERNAME
-        _buildInfoRow(
-          icon: Icons.alternate_email,
-          title: 'Username',
-          value: _username,
-        ),
+          // FULL NAME
+          _buildInfoCard(
+            icon: Icons.person_outline_rounded,
+            label: 'Full name',
+            value: _name == 'Your name' ? '' : _name,
+          ),
 
-        const SizedBox(height: 10),
+          // USERNAME
+          _buildInfoCard(
+            icon: Icons.alternate_email_rounded,
+            label: 'Username',
+            value: _username == '@username' ? '' : _username,
+          ),
 
-        // BIO
-        _buildInfoRow(icon: Icons.info_outline, title: 'Bio', value: _bio),
+          // BIO
+          _buildInfoCard(
+            icon: Icons.info_outline_rounded,
+            label: 'Bio',
+            value: _bio,
+          ),
 
-        const SizedBox(height: 10),
+          // PHONE NUMBER
+          _buildInfoCard(
+            icon: Icons.phone_outlined,
+            label: 'Phone number',
+            value: _phoneNumber,
+          ),
 
-        // PHONE
-        _buildInfoRow(
-          icon: Icons.phone_outlined,
-          title: 'Phone number',
-          value: _phoneNumber,
-        ),
-
-        const SizedBox(height: 10),
-
-        // EMAIL
-        _buildInfoRow(
-          icon: Icons.email_outlined,
-          title: 'Email',
-          value: _email,
-        ),
-      ],
+          // EMAIL ADDRESS
+          _buildInfoCard(
+            icon: Icons.email_outlined,
+            label: 'Email address',
+            value: _email,
+          ),
+        ],
+      ),
     );
   }
 
-  // ===============================================================
-  // BUILD
-  // ===============================================================
+  // ============================================================
+  // BUILD SCREEN
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF4F7),
-
-      // =============================================================
-      // APP BAR
-      // =============================================================
+      backgroundColor: _backgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFF4F7),
-        elevation: 0,
+        backgroundColor: _backgroundColor,
         surfaceTintColor: Colors.transparent,
-
+        elevation: 0,
         leading: IconButton(
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF5A4050)),
+          onPressed: () => Navigator.of(context).pop(),
+          icon: Icon(Icons.arrow_back_rounded, color: _textColor),
         ),
-
-        title: const Text(
-          'Profile',
-          style: TextStyle(
-            color: Color(0xFF5A4050),
-            fontWeight: FontWeight.bold,
-          ),
+        title: Text(
+          'My Profile',
+          style: TextStyle(color: _textColor, fontWeight: FontWeight.w700),
         ),
       ),
-
-      // =============================================================
-      // BODY
-      // =============================================================
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFFC75D83)),
-              )
-            : SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 35),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // =================================================
-                    // PROFILE PICTURE ONLY
-                    // =================================================
-
-                    _buildProfileImage(),
-
-                    const SizedBox(height: 24),
-
-                    // =================================================
-                    // EDIT BUTTON
-                    // =================================================
-                    _buildEditButton(),
-
-                    const SizedBox(height: 30),
-
-                    // =================================================
-                    // PROFILE INFORMATION
-                    // =================================================
-                    _buildProfileInformation(),
-                  ],
-                ),
-              ),
-      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator(color: _primaryColor))
+          : _buildProfileContent(),
     );
   }
 }

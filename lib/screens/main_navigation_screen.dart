@@ -24,27 +24,45 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void initState() {
     super.initState();
 
-    _screens = const [HomeScreen(), CreateScreen(), ChatScreen(), MeScreen()];
+    _screens = [
+      HomeScreen(
+        onOpenSubsection: openSubsection,
+        onCloseSubsection: _closeSubsection,
+      ),
+      const CreateScreen(),
+      const ChatScreen(),
+      const MeScreen(),
+    ];
   }
 
-  // ===============================================================
-  // MAIN NAVIGATION
-  // ===============================================================
+  /// Opens a subsection, such as the breathing screen.
+  void openSubsection(Widget screen) {
+    if (!mounted) return;
 
+    setState(() {
+      _activeSubsection = screen;
+    });
+  }
+
+  /// Handles taps on the bottom navigation bar.
   void _onNavigationTap(int index) {
+    if (index == _currentIndex && _activeSubsection == null) {
+      return;
+    }
+
     setState(() {
       _currentIndex = index;
       _activeSubsection = null;
     });
   }
 
-  // ===============================================================
-  // CLOSE SUBSECTION
-  // ===============================================================
-
+  /// Returns to Home from an open subsection.
   void _closeSubsection() {
+    if (!mounted || _activeSubsection == null) return;
+
     setState(() {
       _activeSubsection = null;
+      _currentIndex = 0;
     });
   }
 
@@ -54,70 +72,70 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final showingSubsection = _activeSubsection != null;
-    final palette = BrieThemeController.instance.currentPalette;
+    return AnimatedBuilder(
+      animation: BrieThemeController.instance,
+      builder: (context, child) {
+        final palette = BrieThemeController.instance.currentPalette;
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
+        final showingSubsection = _activeSubsection != null;
 
-        if (showingSubsection) {
-          _closeSubsection();
-          return;
-        }
+        return PopScope<Object?>(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, result) {
+            if (didPop) return;
+
+            if (showingSubsection) {
+              _closeSubsection();
+            } else if (_currentIndex != 0) {
+              setState(() {
+                _currentIndex = 0;
+              });
+            }
+          },
+          child: Scaffold(
+            backgroundColor: palette.background,
+            body: showingSubsection
+                ? _activeSubsection!
+                : IndexedStack(index: _currentIndex, children: _screens),
+            bottomNavigationBar: showingSubsection
+                ? null
+                : BottomNavigationBar(
+                    currentIndex: _currentIndex,
+                    type: BottomNavigationBarType.fixed,
+                    backgroundColor: palette.surface,
+                    selectedItemColor: palette.accent,
+                    unselectedItemColor: palette.muted,
+                    elevation: 8,
+                    selectedFontSize: 12,
+                    unselectedFontSize: 12,
+                    showUnselectedLabels: true,
+                    onTap: _onNavigationTap,
+                    items: const [
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.home_outlined),
+                        activeIcon: Icon(Icons.home),
+                        label: 'Home',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.auto_awesome_outlined),
+                        activeIcon: Icon(Icons.auto_awesome),
+                        label: 'Create',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.chat_bubble_outline),
+                        activeIcon: Icon(Icons.chat_bubble),
+                        label: 'Chat',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.person_outline),
+                        activeIcon: Icon(Icons.person),
+                        label: 'Me',
+                      ),
+                    ],
+                  ),
+          ),
+        );
       },
-      child: Scaffold(
-        backgroundColor: palette.background,
-        body: showingSubsection
-            ? _activeSubsection!
-            : IndexedStack(index: _currentIndex, children: _screens),
-
-        // =========================================================
-        // BOTTOM NAVIGATION
-        //
-        // Exists ONLY on:
-        // Home / Create / Chat / Me
-        //
-        // It disappears completely inside subsections.
-        // =========================================================
-        bottomNavigationBar: showingSubsection
-            ? null
-            : BottomNavigationBar(
-                currentIndex: _currentIndex,
-                type: BottomNavigationBarType.fixed,
-                backgroundColor: palette.surface,
-                selectedItemColor: palette.accent,
-                unselectedItemColor: palette.muted,
-                elevation: 8,
-                onTap: _onNavigationTap,
-                items: const [
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.home_outlined),
-                    activeIcon: Icon(Icons.home),
-                    label: 'Home',
-                  ),
-
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.auto_awesome_outlined),
-                    activeIcon: Icon(Icons.auto_awesome),
-                    label: 'Create',
-                  ),
-
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.chat_bubble_outline),
-                    activeIcon: Icon(Icons.chat_bubble),
-                    label: 'Chat',
-                  ),
-
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.person_outline),
-                    activeIcon: Icon(Icons.person),
-                    label: 'Me',
-                  ),
-                ],
-              ),
-      ),
     );
   }
 }

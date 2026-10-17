@@ -52,6 +52,7 @@ dependencies:
   flutter_local_notifications: ^22.3.2
   timezone: ^0.11.2
   flutter_timezone: ^5.1.1
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
@@ -80,6 +81,7 @@ flutter:
     - assets/images/butterfly.png
     - assets/images/brie_logo.png
     - assets/images/google_g.png
+    - assets/audio/soft_wind.mp3
 
   # To add assets to your application, add an assets section, like this:
   # assets:
